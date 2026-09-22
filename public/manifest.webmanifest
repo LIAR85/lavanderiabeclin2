@@ -1,0 +1,24 @@
+{
+  "name": "Be Clin · Expertos Lavando",
+  "short_name": "Be Clin",
+  "description": "Sistema operativo de lavandería Be Clin",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#ffffff",
+  "theme_color": "#1b45b4",
+  "icons": [
+    {
+      "src": "/beclin-logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/beclin-logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
