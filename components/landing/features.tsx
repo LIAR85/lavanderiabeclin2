@@ -31,7 +31,7 @@ export function Features() {
           <span className="text-sm font-bold uppercase tracking-widest text-accent">
             Por que Beclin?
           </span>
-          <h2 className="mt-3 font-display text-3xl font-black tracking-tight text-balance sm:text-4xl">
+          <h2 className="mt-3 font-display text-3xl font-semibold tracking-tight text-balance sm:text-4xl">
             Expertos lavando, en quienes puedes confiar
           </h2>
         </div>
@@ -45,7 +45,7 @@ export function Features() {
               <span className="flex size-12 items-center justify-center rounded-xl bg-accent text-accent-foreground">
                 <feature.icon className="size-6" strokeWidth={1.8} />
               </span>
-              <h3 className="mt-5 font-display text-lg font-black">{feature.title}</h3>
+              <h3 className="mt-5 font-display text-lg font-semibold">{feature.title}</h3>
               <p className="mt-2 text-sm leading-relaxed text-primary-foreground/75">
                 {feature.description}
               </p>

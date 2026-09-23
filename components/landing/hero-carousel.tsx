@@ -73,7 +73,7 @@ export function HeroCarousel() {
           />
           <div className="absolute inset-0 bg-gradient-to-t from-primary/80 via-primary/25 to-transparent" />
           <div className="absolute inset-x-0 bottom-0 mx-auto w-full max-w-6xl px-6 pb-10 text-center sm:pb-12">
-            <p className="mx-auto max-w-3xl whitespace-pre-line font-display text-4xl font-black leading-tight text-primary-foreground drop-shadow-sm sm:text-6xl">
+            <p className="mx-auto max-w-3xl whitespace-pre-line font-display text-4xl font-semibold leading-tight text-primary-foreground drop-shadow-sm sm:text-6xl">
               {slide.title}
             </p>
             <p className="mx-auto mt-4 max-w-3xl text-lg leading-relaxed text-primary-foreground/95 text-pretty sm:text-2xl">

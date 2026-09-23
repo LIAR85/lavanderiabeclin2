@@ -1,14 +1,14 @@
 import { Analytics } from '@vercel/analytics/next'
 import type { Metadata, Viewport } from 'next'
-import { Inter, Nunito } from 'next/font/google'
+import { Inter, Poppins } from 'next/font/google'
 import { Providers } from '@/components/providers'
 import './globals.css'
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' })
-const nunito = Nunito({
+const poppins = Poppins({
   subsets: ['latin'],
-  weight: ['600', '700', '800', '900'],
-  variable: '--font-nunito',
+  weight: ['600', '700'],
+  variable: '--font-poppins',
 })
 
 export const metadata: Metadata = {
@@ -43,7 +43,7 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="es" className={`light ${inter.variable} ${nunito.variable} bg-background`}>
+    <html lang="es" className={`light ${inter.variable} ${poppins.variable} bg-background`}>
       <body className="font-sans antialiased">
         <Providers>{children}</Providers>
         {process.env.NODE_ENV === 'production' && <Analytics />}

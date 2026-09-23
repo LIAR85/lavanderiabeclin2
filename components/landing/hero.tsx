@@ -1,5 +1,6 @@
 import Image from 'next/image'
 import { MapPin, MessageCircle, Sparkles } from 'lucide-react'
+import { FilmStripBackground } from '@/components/landing/film-strip-background'
 import { buttonVariants } from '@/components/ui/button'
 import { HeroCarousel } from '@/components/landing/hero-carousel'
 import { cn } from '@/lib/utils'
@@ -7,20 +8,19 @@ import { cn } from '@/lib/utils'
 export function Hero() {
   return (
     <section id="inicio" className="relative overflow-hidden">
-      <div className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-b from-secondary/40 via-background to-background" />
-      <div className="pointer-events-none absolute -right-24 -top-24 -z-10 size-72 rounded-full bg-secondary/50 blur-3xl" />
-      <div className="pointer-events-none absolute -left-20 top-40 -z-10 size-64 rounded-full bg-accent/25 blur-3xl" />
+      <FilmStripBackground />
+      <div className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-b from-white/60 via-white/70 to-background/95" />
 
       <HeroCarousel />
 
       <div className="mx-auto grid w-full max-w-6xl items-center gap-10 px-4 py-16 sm:px-6 md:grid-cols-2 md:py-24">
         <div>
-          <span className="inline-flex items-center gap-2 rounded-full border border-accent/40 bg-accent/15 px-4 py-1.5 text-sm font-bold text-accent-foreground shadow-sm">
+          <span className="inline-flex items-center gap-2 rounded-full border border-[#16224A]/25 bg-white/85 px-4 py-1.5 font-display text-[18px] font-semibold text-[#16224A] shadow-sm">
             <Sparkles className="size-4 text-accent" />
             Expertos lavando en Ciudad Victoria
           </span>
 
-          <h1 className="mt-6 font-display text-4xl font-black leading-[1.05] tracking-tight text-primary text-balance sm:text-5xl lg:text-6xl">
+          <h1 className="mt-6 font-display text-4xl font-semibold leading-[1.05] tracking-tight text-primary text-balance sm:text-5xl lg:text-6xl">
             Tu ropa, impecable y lista para brillar.
           </h1>
 
@@ -72,7 +72,7 @@ export function Hero() {
               <Sparkles className="size-5 text-accent" />
             </span>
             <div className="leading-tight">
-              <p className="font-display text-sm font-black text-primary">Acabado profesional</p>
+              <p className="font-display text-sm font-semibold text-primary">Acabado profesional</p>
               <p className="text-xs text-muted-foreground">Prendas frescas y bien cuidadas</p>
             </div>
           </div>

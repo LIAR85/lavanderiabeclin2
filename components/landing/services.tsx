@@ -60,7 +60,7 @@ export function Services() {
           <span className="text-sm font-bold uppercase tracking-widest text-primary/70">
             Nuestros servicios
           </span>
-          <h2 className="mt-3 font-display text-3xl font-black tracking-tight text-primary text-balance sm:text-4xl">
+          <h2 className="mt-3 font-display text-3xl font-semibold tracking-tight text-primary text-balance sm:text-4xl">
             Somos expertos en lavado y planchado
           </h2>
           <p className="mt-4 text-lg leading-relaxed text-muted-foreground text-pretty">
@@ -77,7 +77,7 @@ export function Services() {
               <span className="flex size-14 items-center justify-center rounded-2xl bg-secondary/45 text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
                 <service.icon className="size-7" strokeWidth={1.6} />
               </span>
-              <h3 className="mt-5 font-display text-lg font-black text-primary">
+              <h3 className="mt-5 font-display text-lg font-semibold text-primary">
                 {service.title}
               </h3>
               <p className="mt-2 text-sm leading-relaxed text-muted-foreground">

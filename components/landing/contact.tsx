@@ -14,7 +14,7 @@ export function Contact() {
             <span className="inline-flex items-center gap-2 rounded-full border border-accent/40 bg-accent/15 px-3 py-1 text-xs font-bold uppercase tracking-widest text-accent-foreground">
               Visitanos
             </span>
-            <h2 className="mt-3 font-display text-3xl font-black tracking-tight text-primary text-balance sm:text-4xl">
+            <h2 className="mt-3 font-display text-3xl font-semibold tracking-tight text-primary text-balance sm:text-4xl">
               Estamos en Plaza Sierra Madre
             </h2>
             <p className="mt-4 max-w-md text-lg leading-relaxed text-muted-foreground text-pretty">
@@ -28,7 +28,7 @@ export function Contact() {
                   <MapPin className="size-5" />
                 </span>
                 <div>
-                  <p className="font-display text-base font-black text-primary">Direccion</p>
+                  <p className="font-display text-base font-semibold text-primary">Direccion</p>
                   <p className="text-sm leading-relaxed text-muted-foreground">
                     16 Sierra Hermosa, Plaza Sierra Madre,
                     <br />
@@ -41,7 +41,7 @@ export function Contact() {
                   <Phone className="size-5" />
                 </span>
                 <div>
-                  <p className="font-display text-base font-black text-primary">Telefono</p>
+                  <p className="font-display text-base font-semibold text-primary">Telefono</p>
                   <a
                     href="tel:+528341411298"
                     className="text-sm font-semibold text-muted-foreground transition-colors hover:text-primary"

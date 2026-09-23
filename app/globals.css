@@ -4,7 +4,7 @@
 
 @theme inline {
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
-  --font-display: var(--font-nunito), var(--font-inter), ui-sans-serif, sans-serif;
+  --font-display: var(--font-poppins), var(--font-inter), ui-sans-serif, sans-serif;
 
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -41,6 +41,116 @@
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) * 1.4);
   --radius-2xl: calc(var(--radius) * 1.8);
+}
+
+.film-bg {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 10% 12%, rgba(255, 255, 255, 0.9), transparent 42%),
+    radial-gradient(circle at 90% 10%, rgba(186, 207, 255, 0.45), transparent 38%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(239, 245, 255, 0.9));
+}
+
+.film-strip-row {
+  position: relative;
+  display: flex;
+  width: max-content;
+  gap: 1.15rem;
+  padding: 0.55rem 0;
+  opacity: 0.52;
+}
+
+.film-strip-row.reverse {
+  animation-direction: reverse;
+}
+
+.film-strip-row.row-a {
+  margin-top: 3%;
+  animation: film-scroll 36s linear infinite;
+  transform: rotate(-1.25deg);
+}
+
+.film-strip-row.row-b {
+  margin-top: 5.5%;
+  animation: film-scroll 42s linear infinite;
+  transform: rotate(1.1deg);
+}
+
+.film-strip-row.row-c {
+  margin-top: 5.5%;
+  animation: film-scroll 39s linear infinite;
+  transform: rotate(-0.85deg);
+}
+
+.film-frame {
+  position: relative;
+  height: clamp(124px, 18vw, 232px);
+  width: clamp(190px, 28vw, 360px);
+  overflow: hidden;
+  border-radius: 14px;
+  border: 1px solid rgba(10, 20, 45, 0.55);
+  background: #0d152b;
+  box-shadow:
+    0 10px 30px rgba(8, 17, 38, 0.26),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  padding: 0.5rem 0.75rem;
+}
+
+.film-frame::before,
+.film-frame::after {
+  content: '';
+  position: absolute;
+  top: 0.45rem;
+  bottom: 0.45rem;
+  width: 0.38rem;
+  background: repeating-radial-gradient(circle, rgba(0, 0, 0, 0.95) 0 2.5px, transparent 2.5px 8.5px);
+  opacity: 0.82;
+  z-index: 2;
+}
+
+.film-frame::before {
+  left: 0.18rem;
+}
+
+.film-frame::after {
+  right: 0.18rem;
+}
+
+.film-frame-visual {
+  position: relative;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  border-radius: 10px;
+}
+
+.film-photo {
+  filter: brightness(1.08) contrast(1.07) saturate(1.08);
+}
+
+.film-frame-visual::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(208, 222, 255, 0.18), rgba(22, 34, 74, 0.1));
+  pointer-events: none;
+}
+
+@keyframes film-scroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .film-strip-row {
+    animation: none;
+  }
 }
 
 :root {
