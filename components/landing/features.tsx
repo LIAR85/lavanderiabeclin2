@@ -36,17 +36,19 @@ export function Features() {
           </h2>
         </div>
 
-        <div className="mt-14 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-14 grid grid-cols-2 gap-3 sm:grid-cols-2 sm:gap-6 lg:grid-cols-4">
           {features.map((feature) => (
             <div
               key={feature.title}
-              className="rounded-2xl bg-primary-foreground/10 p-6 backdrop-blur-sm"
+              className="rounded-2xl bg-primary-foreground/10 p-4 backdrop-blur-sm sm:p-6"
             >
-              <span className="flex size-12 items-center justify-center rounded-xl bg-accent text-accent-foreground">
-                <feature.icon className="size-6" strokeWidth={1.8} />
+              <span className="flex size-10 items-center justify-center rounded-lg bg-accent text-accent-foreground sm:size-12 sm:rounded-xl">
+                <feature.icon className="size-5 sm:size-6" strokeWidth={1.8} />
               </span>
-              <h3 className="mt-5 font-display text-lg font-semibold">{feature.title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-primary-foreground/75">
+              <h3 className="mt-4 font-display text-[15px] leading-tight font-semibold sm:mt-5 sm:text-lg">
+                {feature.title}
+              </h3>
+              <p className="mt-2 text-xs leading-relaxed text-primary-foreground/75 sm:text-sm">
                 {feature.description}
               </p>
             </div>

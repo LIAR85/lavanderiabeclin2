@@ -68,19 +68,19 @@ export function Services() {
           </p>
         </div>
 
-        <div className="mt-14 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-14 grid grid-cols-2 gap-3 sm:grid-cols-2 sm:gap-5 lg:grid-cols-4">
           {services.map((service) => (
             <div
               key={service.title}
-              className="group rounded-2xl border border-border bg-card p-6 transition-all hover:-translate-y-1 hover:border-secondary hover:shadow-lg"
+              className="group rounded-2xl border border-border bg-card p-4 transition-all hover:-translate-y-1 hover:border-secondary hover:shadow-lg sm:p-6"
             >
-              <span className="flex size-14 items-center justify-center rounded-2xl bg-secondary/45 text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
-                <service.icon className="size-7" strokeWidth={1.6} />
+              <span className="flex size-11 items-center justify-center rounded-xl bg-secondary/45 text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground sm:size-14 sm:rounded-2xl">
+                <service.icon className="size-5 sm:size-7" strokeWidth={1.6} />
               </span>
-              <h3 className="mt-5 font-display text-lg font-semibold text-primary">
+              <h3 className="mt-4 font-display text-[15px] leading-tight font-semibold text-primary sm:mt-5 sm:text-lg">
                 {service.title}
               </h3>
-              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+              <p className="mt-2 text-xs leading-relaxed text-muted-foreground sm:text-sm">
                 {service.description}
               </p>
             </div>

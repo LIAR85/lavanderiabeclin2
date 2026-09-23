@@ -35,7 +35,8 @@ const slides = [
   },
 ]
 
-const AUTOPLAY_MS = 5000
+const AUTOPLAY_MS_MOBILE = 5000
+const AUTOPLAY_MS_DESKTOP = 7000
 
 export function HeroCarousel() {
   const [index, setIndex] = useState(0)
@@ -48,9 +49,10 @@ export function HeroCarousel() {
   const next = useCallback(() => goTo(index + 1), [goTo, index])
 
   useEffect(() => {
+    const autoplayMs = window.innerWidth >= 1024 ? AUTOPLAY_MS_DESKTOP : AUTOPLAY_MS_MOBILE
     const id = setInterval(() => {
       setIndex((current) => (current + 1) % slides.length)
-    }, AUTOPLAY_MS)
+    }, autoplayMs)
     return () => clearInterval(id)
   }, [])
 
@@ -58,7 +60,7 @@ export function HeroCarousel() {
     <section
       aria-roledescription="carrusel"
       aria-label="Galeria de servicios beclin"
-      className="relative aspect-[16/9] w-full overflow-hidden bg-primary sm:aspect-[21/9]"
+      className="relative h-[100svh] min-h-[620px] w-full overflow-hidden bg-primary sm:aspect-[21/9] sm:h-auto sm:min-h-0"
     >
       {slides.map((slide, i) => (
         <div
