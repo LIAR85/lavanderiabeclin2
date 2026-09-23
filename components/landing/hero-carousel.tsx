@@ -8,26 +8,30 @@ const slides = [
   {
     src: '/slide-1.png',
     alt: 'Ropa y toallas recien lavadas y dobladas por beclin',
-    title: 'Lavado y secado\nprofesional',
-    caption: 'Tu ropa fresca, suave y lista para usar.',
+    title: 'Lavado profesional,\nropa impecable siempre.',
+    caption:
+      'En beclin brindamos servicio de limpieza profesional y tintoreria con calidad humana, cuidando cada prenda con procesos confiables para que cada cliente avance con tranquilidad en su dia a dia.',
   },
   {
     src: '/slide-2.png',
     alt: 'Planchado profesional de una camisa blanca',
-    title: 'Planchado\nimpecable',
-    caption: 'Acabado nitido en cada prenda.',
+    title: 'Planchado preciso,\npresentacion impecable.',
+    caption:
+      'En beclin dejamos cada prenda con un terminado limpio y profesional, cuidando telas, cortes y detalles para que siempre luzcas ordenado y seguro en cada ocasion.',
   },
   {
     src: '/slide-3.png',
     alt: 'Lavadoras modernas en la lavanderia beclin',
-    title: 'Equipo siempre listo\npara servirte',
-    caption: 'Cuidamos cada carga con la mejor tecnologia.',
+    title: 'Tecnologia confiable,\nresultado superior.',
+    caption:
+      'Trabajamos con equipos modernos y procesos eficientes que permiten cuidar cada carga con consistencia, higiene y calidad en todo momento.',
   },
   {
     src: '/slide-4.png',
     alt: 'Prendas de tintoreria cubiertas y colgadas',
-    title: 'Tintoreria\nespecializada',
-    caption: 'Trajes, vestidos y prendas delicadas como nuevas.',
+    title: 'Tintoreria experta,\nprendas como nuevas.',
+    caption:
+      'Atendemos trajes, vestidos y prendas delicadas con tratamientos especializados para conservar textura, color y forma, entregando resultados de alta calidad.',
   },
 ]
 
@@ -71,14 +75,16 @@ export function HeroCarousel() {
             sizes="100vw"
             className="object-cover"
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-primary/80 via-primary/25 to-transparent" />
-          <div className="absolute inset-x-0 bottom-0 mx-auto w-full max-w-6xl px-6 pb-10 text-center sm:pb-12">
-            <p className="mx-auto max-w-3xl whitespace-pre-line font-display text-4xl font-semibold leading-tight text-primary-foreground drop-shadow-sm sm:text-6xl">
-              {slide.title}
-            </p>
-            <p className="mx-auto mt-4 max-w-3xl text-lg leading-relaxed text-primary-foreground/95 text-pretty sm:text-2xl">
-              {slide.caption}
-            </p>
+          <div className="absolute inset-0 bg-gradient-to-r from-primary/60 via-primary/25 to-transparent" />
+          <div className="absolute inset-y-0 left-0 z-10 flex w-full items-center px-6 md:px-[8%]">
+            <div className="max-w-[620px] text-left">
+              <p className="max-w-[620px] whitespace-pre-line font-display text-[34px] leading-[1.08] font-bold text-white sm:text-[42px] lg:text-[56px] [text-shadow:0_2px_16px_rgba(22,34,74,0.45)]">
+                {slide.title}
+              </p>
+              <p className="mt-6 max-w-[520px] text-[18px] leading-[1.6] font-normal text-[rgba(255,255,255,0.9)] [text-shadow:0_2px_16px_rgba(22,34,74,0.45)]">
+                {slide.caption}
+              </p>
+            </div>
           </div>
         </div>
       ))}
