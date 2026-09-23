@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { Resend } from 'resend'
 import { SERVICE_LABELS } from '@/lib/config'
 import type { ServiceType } from '@/lib/types'
 
@@ -34,6 +35,8 @@ export async function POST(request: Request) {
     )
   }
 
+  const resend = new Resend(apiKey)
+
   const body = (await request.json().catch(() => null)) as OrderCreatedPayload | null
 
   if (!body?.orderNumber || !body.clientName || !body.serviceType || typeof body.total !== 'number') {
@@ -65,23 +68,15 @@ export async function POST(request: Request) {
     </div>
   `
 
-  const response = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      from: fromEmail,
-      to: recipients,
-      subject,
-      html,
-    }),
+  const { error } = await resend.emails.send({
+    from: fromEmail,
+    to: recipients,
+    subject,
+    html,
   })
 
-  if (!response.ok) {
-    const detail = await response.text()
-    return NextResponse.json({ error: 'Resend rechazo el envio.', detail }, { status: 502 })
+  if (error) {
+    return NextResponse.json({ error: 'Resend rechazo el envio.', detail: error.message }, { status: 502 })
   }
 
   return NextResponse.json({ ok: true })

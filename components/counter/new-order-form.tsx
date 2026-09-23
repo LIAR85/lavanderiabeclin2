@@ -40,6 +40,40 @@ import { cn } from '@/lib/utils'
 
 const BAG_OPTIONS: BagSize[] = ['quarter', 'half', 'threequarter', 'full', 'custom']
 
+function getErrorMessage(err: unknown): string {
+  if (err instanceof Error && err.message) return err.message
+  if (typeof err === 'string' && err.trim()) return err
+
+  if (err && typeof err === 'object') {
+    const maybe = err as {
+      message?: string
+      error?: string
+      details?: string
+      hint?: string
+      code?: string
+    }
+
+    const parts = [
+      maybe.message,
+      maybe.error,
+      maybe.details,
+      maybe.hint,
+      maybe.code ? `codigo: ${maybe.code}` : undefined,
+    ].filter(Boolean)
+
+    if (parts.length > 0) return parts.join(' | ')
+
+    try {
+      const raw = JSON.stringify(err)
+      if (raw && raw !== '{}') return raw
+    } catch {
+      // Ignore stringify failures and fall back to generic message.
+    }
+  }
+
+  return 'Error desconocido al crear la orden.'
+}
+
 export function NewOrderForm({
   online,
   onCreated,
@@ -304,8 +338,14 @@ export function NewOrderForm({
         reset()
       }
     } catch (err) {
-      console.error('[v0] createOrder error', err)
-      toast.error('No se pudo crear la orden. Intenta de nuevo.')
+      const details = getErrorMessage(err)
+      console.error('[v0] createOrder error', {
+        details,
+        raw: err,
+      })
+      toast.error('No se pudo crear la orden.', {
+        description: details,
+      })
     } finally {
       setSubmitting(false)
     }
