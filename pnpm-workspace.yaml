@@ -4,3 +4,7 @@ minimumReleaseAgeExclude:
   - '@next/*'
   - next
   - wrangler@4.136.3
+
+onlyBuiltDependencies:
+  - esbuild
+  - workerd
