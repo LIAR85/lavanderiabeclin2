@@ -70,7 +70,6 @@ export function NewOrderForm({
   const [paymentTiming, setPaymentTiming] = useState<'on_receipt' | 'on_delivery'>(
     'on_delivery',
   )
-  const [enableMercadoPago, setEnableMercadoPago] = useState(false)
   const [manualChargeEnabled, setManualChargeEnabled] = useState(false)
   const [manualChargeAmount, setManualChargeAmount] = useState('')
   const [notes, setNotes] = useState('')
@@ -167,35 +166,29 @@ export function NewOrderForm({
     setInstructions([])
     setFreeInstruction('')
     setPaymentTiming('on_delivery')
-    setEnableMercadoPago(false)
     setManualChargeEnabled(false)
     setManualChargeAmount('')
     setNotes('')
   }
 
-  async function createMercadoPagoCheckout(params: {
+  async function sendOrderCreatedEmail(params: {
     orderNumber: string
-    customerName: string
-    customerEmail?: string
-    amount: number
+    clientName: string
+    clientEmail?: string
+    serviceType: ServiceType
+    total: number
+    promisedDateIso: string
   }) {
-    const res = await fetch('/api/payments/mercadopago/checkout', {
+    const response = await fetch('/api/notifications/order-created', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        orderNumber: params.orderNumber,
-        customerName: params.customerName,
-        customerEmail: params.customerEmail,
-        amount: params.amount,
-      }),
+      body: JSON.stringify(params),
     })
 
-    const payload = await res.json()
-    if (!res.ok) {
-      throw new Error(payload?.error ?? 'No se pudo crear el cobro con Mercado Pago')
+    if (!response.ok) {
+      const payload = await response.json().catch(() => null)
+      throw new Error(payload?.error ?? 'No se pudo enviar el correo de confirmacion')
     }
-
-    return payload as { checkoutUrl: string; preferenceId: string }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -238,15 +231,18 @@ export function NewOrderForm({
         const order = await createOrder(input)
         qc.invalidateQueries({ queryKey: ['orders'] })
 
-        if (enableMercadoPago) {
-          const checkout = await createMercadoPagoCheckout({
+        try {
+          await sendOrderCreatedEmail({
             orderNumber: order.order_number,
-            customerName: name.trim(),
-            customerEmail: email.trim() || undefined,
-            amount: chargeAmount,
+            clientName: name.trim(),
+            clientEmail: email.trim() || undefined,
+            serviceType,
+            total: chargeAmount,
+            promisedDateIso: promisedDate.toISOString(),
           })
-          window.open(checkout.checkoutUrl, '_blank', 'noopener,noreferrer')
-          toast.success('Checkout de Mercado Pago generado')
+        } catch (emailErr) {
+          console.warn('[v0] sendOrderCreatedEmail warning', emailErr)
+          toast.warning('Orden creada, pero no se pudo enviar el correo automatico')
         }
 
         onCreated(order, false)
@@ -672,22 +668,6 @@ export function NewOrderForm({
               )}
               <p className="text-xs text-muted-foreground">
                 Monto que se usará para cobro: {formatCurrency(chargeAmount)}
-              </p>
-            </div>
-
-            <div className="flex flex-col gap-2 rounded-lg border border-border p-3">
-              <label className="flex items-center gap-2 text-sm font-600">
-                <input
-                  type="checkbox"
-                  checked={enableMercadoPago}
-                  onChange={(e) => setEnableMercadoPago(e.target.checked)}
-                  className="size-4"
-                  disabled={!online}
-                />
-                Generar cobro con Mercado Pago al crear orden
-              </label>
-              <p className="text-xs text-muted-foreground">
-                El cobro se crea en servidor usando tu Access Token y abre checkout en otra pestaña.
               </p>
             </div>
 
