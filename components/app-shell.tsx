@@ -30,7 +30,7 @@ export function AppShell() {
     <div className="flex min-h-dvh flex-col bg-background">
       <header className="sticky top-0 z-30 border-b border-border bg-background/90 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             <div className="flex items-center justify-center rounded-xl bg-white p-2 shadow-sm ring-1 ring-black/5">
               <Image
                 src="/beclin-logo.png"
@@ -50,7 +50,7 @@ export function AppShell() {
               </span>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 sm:gap-3">
             <span
               className={cn(
                 'flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-700',
@@ -67,28 +67,28 @@ export function AppShell() {
               />
               {online ? 'En línea' : 'Sin conexión'}
             </span>
+            <nav className="hidden items-center gap-1 sm:flex">
+              {NAV.map((n) => {
+                const Icon = n.icon
+                return (
+                  <button
+                    key={n.key}
+                    onClick={() => setTab(n.key)}
+                    className={cn(
+                      'flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-700 transition-colors',
+                      tab === n.key
+                        ? 'border-primary bg-primary/10 text-primary'
+                        : 'border-border text-muted-foreground hover:text-foreground',
+                    )}
+                  >
+                    <Icon className="size-4" />
+                    {n.label}
+                  </button>
+                )
+              })}
+            </nav>
           </div>
         </div>
-        <nav className="mx-auto hidden max-w-6xl gap-1 px-4 pb-1 sm:flex">
-          {NAV.map((n) => {
-            const Icon = n.icon
-            return (
-              <button
-                key={n.key}
-                onClick={() => setTab(n.key)}
-                className={cn(
-                  'flex items-center gap-2 rounded-t-lg border-b-2 px-4 py-2.5 text-sm font-700 transition-colors',
-                  tab === n.key
-                    ? 'border-primary text-primary'
-                    : 'border-transparent text-muted-foreground hover:text-foreground',
-                )}
-              >
-                <Icon className="size-4" />
-                {n.label}
-              </button>
-            )
-          })}
-        </nav>
       </header>
 
       <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-5 pb-24 sm:pb-8">

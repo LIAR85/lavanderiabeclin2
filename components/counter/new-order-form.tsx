@@ -70,6 +70,9 @@ export function NewOrderForm({
   const [paymentTiming, setPaymentTiming] = useState<'on_receipt' | 'on_delivery'>(
     'on_delivery',
   )
+  const [enableMercadoPago, setEnableMercadoPago] = useState(false)
+  const [manualChargeEnabled, setManualChargeEnabled] = useState(false)
+  const [manualChargeAmount, setManualChargeAmount] = useState('')
   const [notes, setNotes] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
@@ -117,6 +120,12 @@ export function NewOrderForm({
     [settings, mode],
   )
 
+  const chargeAmount = useMemo(() => {
+    if (!manualChargeEnabled) return price.total
+    const parsed = Number(manualChargeAmount)
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 0
+  }, [manualChargeAmount, manualChargeEnabled, price.total])
+
   function addSpecialItem(name: string, unit_price: number) {
     setSpecialItems((prev) => {
       const existing = prev.find((i) => i.name === name)
@@ -158,13 +167,45 @@ export function NewOrderForm({
     setInstructions([])
     setFreeInstruction('')
     setPaymentTiming('on_delivery')
+    setEnableMercadoPago(false)
+    setManualChargeEnabled(false)
+    setManualChargeAmount('')
     setNotes('')
+  }
+
+  async function createMercadoPagoCheckout(params: {
+    orderNumber: string
+    customerName: string
+    customerEmail?: string
+    amount: number
+  }) {
+    const res = await fetch('/api/payments/mercadopago/checkout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        orderNumber: params.orderNumber,
+        customerName: params.customerName,
+        customerEmail: params.customerEmail,
+        amount: params.amount,
+      }),
+    })
+
+    const payload = await res.json()
+    if (!res.ok) {
+      throw new Error(payload?.error ?? 'No se pudo crear el cobro con Mercado Pago')
+    }
+
+    return payload as { checkoutUrl: string; preferenceId: string }
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!name.trim() || phone.trim().length < 7) {
       toast.error('Captura nombre y teléfono válido del cliente')
+      return
+    }
+    if (manualChargeEnabled && chargeAmount <= 0) {
+      toast.error('Captura un monto manual de cobro válido')
       return
     }
     const allInstructions = [
@@ -188,6 +229,7 @@ export function NewOrderForm({
       subtotal: price.subtotal,
       extras_total: price.extrasTotal,
       total: price.total,
+      charged_total: paymentTiming === 'on_receipt' ? chargeAmount : undefined,
     }
 
     setSubmitting(true)
@@ -195,6 +237,18 @@ export function NewOrderForm({
       if (online) {
         const order = await createOrder(input)
         qc.invalidateQueries({ queryKey: ['orders'] })
+
+        if (enableMercadoPago) {
+          const checkout = await createMercadoPagoCheckout({
+            orderNumber: order.order_number,
+            customerName: name.trim(),
+            customerEmail: email.trim() || undefined,
+            amount: chargeAmount,
+          })
+          window.open(checkout.checkoutUrl, '_blank', 'noopener,noreferrer')
+          toast.success('Checkout de Mercado Pago generado')
+        }
+
         onCreated(order, false)
         toast.success(`Orden ${order.order_number} creada`)
         reset()
@@ -226,9 +280,13 @@ export function NewOrderForm({
           customer_instructions: allInstructions || null,
           payment_timing: paymentTiming,
           payment_status: paymentTiming === 'on_receipt' ? 'paid' : 'pending',
-          charged_total: paymentTiming === 'on_receipt' ? price.total : null,
-          price_overridden: false,
-          price_override_note: null,
+          charged_total: paymentTiming === 'on_receipt' ? chargeAmount : null,
+          price_overridden:
+            paymentTiming === 'on_receipt' && Math.abs(chargeAmount - price.total) > 0.001,
+          price_override_note:
+            paymentTiming === 'on_receipt' && Math.abs(chargeAmount - price.total) > 0.001
+              ? 'Cobro manual capturado al crear la orden'
+              : null,
           anomaly_tags: [],
           has_anomalies: false,
           notes: notes.trim() || null,
@@ -590,6 +648,49 @@ export function NewOrderForm({
               </div>
             </div>
 
+            <div className="flex flex-col gap-2 rounded-lg border border-border p-3">
+              <label className="flex items-center gap-2 text-sm font-600">
+                <input
+                  type="checkbox"
+                  checked={manualChargeEnabled}
+                  onChange={(e) => setManualChargeEnabled(e.target.checked)}
+                  className="size-4"
+                />
+                Capturar monto de cobro manual
+              </label>
+              {manualChargeEnabled && (
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="manual-charge">Monto a cobrar</Label>
+                  <Input
+                    id="manual-charge"
+                    inputMode="decimal"
+                    value={manualChargeAmount}
+                    onChange={(e) => setManualChargeAmount(e.target.value)}
+                    placeholder="0.00"
+                  />
+                </div>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Monto que se usará para cobro: {formatCurrency(chargeAmount)}
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-2 rounded-lg border border-border p-3">
+              <label className="flex items-center gap-2 text-sm font-600">
+                <input
+                  type="checkbox"
+                  checked={enableMercadoPago}
+                  onChange={(e) => setEnableMercadoPago(e.target.checked)}
+                  className="size-4"
+                  disabled={!online}
+                />
+                Generar cobro con Mercado Pago al crear orden
+              </label>
+              <p className="text-xs text-muted-foreground">
+                El cobro se crea en servidor usando tu Access Token y abre checkout en otra pestaña.
+              </p>
+            </div>
+
             <Button
               type="submit"
               disabled={submitting}
@@ -598,7 +699,7 @@ export function NewOrderForm({
               {submitting ? (
                 <Loader2 className="size-5 animate-spin" />
               ) : (
-                <>Crear orden · {formatCurrency(price.total)}</>
+                <>Crear orden · {formatCurrency(chargeAmount)}</>
               )}
             </Button>
             {!online && (

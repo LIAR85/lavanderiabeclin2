@@ -89,6 +89,10 @@ export async function createOrder(
 ): Promise<OrderWithClient> {
   const client = await upsertClient(input.client)
   const order_number = orderNumber ?? (await generateOrderNumber())
+  const hasManualChargeOverride =
+    input.payment_timing === 'on_receipt' &&
+    typeof input.charged_total === 'number' &&
+    Math.abs(input.charged_total - input.total) > 0.001
 
   const { data: order, error } = await supabase()
     .from('orders')
@@ -109,7 +113,14 @@ export async function createOrder(
       customer_instructions: input.customer_instructions || null,
       payment_timing: input.payment_timing,
       payment_status: input.payment_timing === 'on_receipt' ? 'paid' : 'pending',
-      charged_total: input.payment_timing === 'on_receipt' ? input.total : null,
+      charged_total:
+        input.payment_timing === 'on_receipt'
+          ? input.charged_total ?? input.total
+          : null,
+      price_overridden: hasManualChargeOverride,
+      price_override_note: hasManualChargeOverride
+        ? 'Cobro manual capturado al crear la orden'
+        : null,
       notes: input.notes || null,
     })
     .select('*')

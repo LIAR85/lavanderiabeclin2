@@ -113,4 +113,5 @@ export interface NewOrderInput {
   subtotal: number
   extras_total: number
   total: number
+  charged_total?: number
 }
