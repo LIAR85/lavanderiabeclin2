@@ -200,19 +200,49 @@
 
 /* Print styles for ticket */
 @media print {
+  @page {
+    size: auto;
+    margin: 8mm;
+  }
+
+  html,
+  body {
+    margin: 0;
+    padding: 0;
+    background: #fff !important;
+  }
+
   body * {
     visibility: hidden;
   }
+
   #printable-ticket,
   #printable-ticket * {
     visibility: visible;
   }
+
   #printable-ticket {
-    position: absolute;
-    left: 0;
+    position: fixed;
+    left: 50%;
     top: 0;
-    width: 100%;
+    transform: translateX(-50%);
+    width: 76mm;
+    max-width: 76mm;
+    margin: 0;
+    padding: 3mm;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    background: #fff !important;
+    page-break-inside: avoid;
+    break-inside: avoid;
   }
+
+  #printable-ticket canvas {
+    max-width: 100%;
+    height: auto !important;
+  }
+
   .no-print {
     display: none !important;
   }

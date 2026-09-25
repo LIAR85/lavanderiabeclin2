@@ -29,7 +29,7 @@ export function TicketDialog({
       <div className="p-4">
         <div
           id="printable-ticket"
-          className="mx-auto flex max-w-xs flex-col items-center gap-3 rounded-xl border border-border bg-white p-5 text-center text-black"
+          className="mx-auto flex w-[76mm] max-w-[76mm] flex-col items-center gap-3 rounded-xl border border-border bg-white p-5 text-center text-black"
         >
           <div className="font-display text-2xl font-900 tracking-tight text-primary">
             be clin
