@@ -2,6 +2,7 @@
 
 import {
   Boxes,
+  CalendarDays,
   Lock,
   Receipt,
   Settings2,
@@ -15,19 +16,30 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ADMIN_PASSWORD } from '@/lib/config'
 import { cn } from '@/lib/utils'
+import { AdminDeliveryCalendar } from './admin-delivery-calendar'
 import { AdminExpenses } from './admin-expenses'
+import { AdminHistory } from './admin-history'
 import { AdminInventory } from './admin-inventory'
 import { AdminMetrics } from './admin-metrics'
 import { AdminPeople } from './admin-people'
 import { AdminSettings } from './admin-settings'
 
-type Tab = 'metrics' | 'inventory' | 'expenses' | 'people' | 'settings'
+type Tab =
+  | 'metrics'
+  | 'inventory'
+  | 'expenses'
+  | 'people'
+  | 'calendar'
+  | 'history'
+  | 'settings'
 
 const TABS: { key: Tab; label: string; icon: typeof TrendingUp }[] = [
   { key: 'metrics', label: 'Métricas', icon: TrendingUp },
   { key: 'inventory', label: 'Inventario', icon: Boxes },
   { key: 'expenses', label: 'Gastos', icon: Receipt },
   { key: 'people', label: 'Personal', icon: Users },
+  { key: 'calendar', label: 'Calendario', icon: CalendarDays },
+  { key: 'history', label: 'Historial', icon: Receipt },
   { key: 'settings', label: 'Ajustes', icon: Settings2 },
 ]
 
@@ -57,6 +69,10 @@ export function AdminView() {
         return <AdminExpenses />
       case 'people':
         return <AdminPeople />
+      case 'calendar':
+        return <AdminDeliveryCalendar />
+      case 'history':
+        return <AdminHistory />
       case 'settings':
         return <AdminSettings />
     }

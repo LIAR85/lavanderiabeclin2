@@ -77,10 +77,17 @@ export function saveExpenses(items: Expense[]) {
 // ---- Employees ----
 export interface Employee {
   id: string
+  employeeNumber: string
+  pin: string
   name: string
   role: string
   phone: string
+  dailyRate: number
   active: boolean
+  // Legacy fields from previous schema; kept optional for smooth migration.
+  scheduleStart?: string
+  scheduleEnd?: string
+  hourlyRate?: number
 }
 export function getEmployees(): Employee[] {
   return read<Employee[]>('employees', [])
@@ -104,6 +111,131 @@ export function getPayroll(): PayrollEntry[] {
 }
 export function savePayroll(items: PayrollEntry[]) {
   write('payroll', items)
+}
+
+// ---- Delivery capacity (calendar) ----
+export type IroningLimitedService = 'planchado' | 'lavado_planchado'
+
+export interface DailyIroningConfig {
+  limits: Record<IroningLimitedService, number>
+  unlimited: Record<IroningLimitedService, boolean>
+}
+
+export interface DeliveryCapacityConfig {
+  byDate: Record<string, DailyIroningConfig>
+  defaultConfig: DailyIroningConfig
+}
+
+const DEFAULT_DELIVERY_CAPACITY: DeliveryCapacityConfig = {
+  byDate: {},
+  defaultConfig: {
+    limits: {
+      planchado: 40,
+      lavado_planchado: 40,
+    },
+    unlimited: {
+      planchado: false,
+      lavado_planchado: false,
+    },
+  },
+}
+
+function asValidLimit(value: unknown, fallback: number): number {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return fallback
+  const int = Math.floor(n)
+  if (int < 0) return fallback
+  return int
+}
+
+function asValidBool(value: unknown, fallback: boolean): boolean {
+  return typeof value === 'boolean' ? value : fallback
+}
+
+function normalizeDay(raw: unknown, fallbackLimit: number): DailyIroningConfig {
+  if (typeof raw === 'number') {
+    const limit = asValidLimit(raw, fallbackLimit)
+    return {
+      limits: {
+        planchado: limit,
+        lavado_planchado: limit,
+      },
+      unlimited: {
+        planchado: false,
+        lavado_planchado: false,
+      },
+    }
+  }
+
+  const candidate = raw as {
+    limits?: Partial<Record<IroningLimitedService, number>>
+    unlimited?: Partial<Record<IroningLimitedService, boolean>>
+  }
+
+  return {
+    limits: {
+      planchado: asValidLimit(candidate?.limits?.planchado, fallbackLimit),
+      lavado_planchado: asValidLimit(
+        candidate?.limits?.lavado_planchado,
+        fallbackLimit,
+      ),
+    },
+    unlimited: {
+      planchado: asValidBool(candidate?.unlimited?.planchado, false),
+      lavado_planchado: asValidBool(candidate?.unlimited?.lavado_planchado, false),
+    },
+  }
+}
+
+function normalizeDeliveryCapacity(raw: unknown): DeliveryCapacityConfig {
+  const candidate = raw as {
+    byDate?: Record<string, unknown>
+    defaultIroningDailyMax?: number
+    defaultConfig?: unknown
+  }
+
+  const legacyDefault = asValidLimit(candidate?.defaultIroningDailyMax, 40)
+  const defaultConfig = normalizeDay(candidate?.defaultConfig, legacyDefault)
+  const byDateRaw = candidate?.byDate ?? {}
+  const byDate: Record<string, DailyIroningConfig> = {}
+
+  for (const [key, value] of Object.entries(byDateRaw)) {
+    byDate[key] = normalizeDay(value, defaultConfig.limits.planchado)
+  }
+
+  return {
+    byDate,
+    defaultConfig,
+  }
+}
+
+export function getDeliveryCapacityConfig(): DeliveryCapacityConfig {
+  const raw = read<unknown>('delivery_capacity', DEFAULT_DELIVERY_CAPACITY)
+  return normalizeDeliveryCapacity(raw)
+}
+
+export function saveDeliveryCapacityConfig(config: DeliveryCapacityConfig) {
+  write('delivery_capacity', config)
+}
+
+// ---- Attendance ----
+export type AttendanceEventType = 'in' | 'out'
+
+export interface AttendanceRecord {
+  id: string
+  employeeId: string
+  employeeNumber: string
+  employeeName: string
+  eventType: AttendanceEventType
+  timestamp: string
+}
+
+export function getAttendanceRecords(): AttendanceRecord[] {
+  return read<AttendanceRecord[]>('attendance_records', [])
+}
+
+export function saveAttendanceRecords(items: AttendanceRecord[]) {
+  write('attendance_records', items)
 }
 
 export function uid(): string {

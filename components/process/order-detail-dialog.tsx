@@ -1,6 +1,6 @@
 'use client'
 
-import { ArrowRight, Check, Loader2 } from 'lucide-react'
+import { ArrowRight, Check, Loader2, Mail } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
@@ -41,6 +41,7 @@ export function OrderDetailDialog({
 
   const [charged, setCharged] = useState('')
   const [overrideNote, setOverrideNote] = useState('')
+  const [sendingReadyEmail, setSendingReadyEmail] = useState(false)
 
   useEffect(() => {
     if (order) setCharged(String(order.total))
@@ -52,6 +53,7 @@ export function OrderDetailDialog({
   const next = getNextStatus(order.service_type, order.status)
   const isFinal = order.status === 'delivered'
   const readyToDeliver = order.status === 'ready'
+  const hasClientEmail = Boolean(order.client.email?.trim())
   const chargedNum = Number(charged) || 0
   const hasOverride = Math.abs(chargedNum - order.total) > 0.001
 
@@ -64,7 +66,6 @@ export function OrderDetailDialog({
     try {
       await advance.mutateAsync({ orderId: order.id, nextStatus: next })
       toast.success(`Estado actualizado: ${nextVisibleLabel}`)
-      onClose()
     } catch {
       toast.error('No se pudo actualizar el estado')
     }
@@ -83,10 +84,63 @@ export function OrderDetailDialog({
         originalTotal: order.total,
         overrideNote: overrideNote.trim() || undefined,
       })
+
+      try {
+        const response = await fetch('/api/notifications/order-collected', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            orderNumber: order.order_number,
+            clientName: order.client.name,
+            chargedTotal: chargedNum,
+            originalTotal: order.total,
+            paymentOverridden: hasOverride,
+            overrideNote: overrideNote.trim() || undefined,
+          }),
+        })
+        if (!response.ok) {
+          const payload = await response.json().catch(() => null)
+          throw new Error(payload?.error ?? 'No se pudo enviar correo de cobro')
+        }
+      } catch (notifyErr) {
+        console.warn('[v0] order-collected email warning', notifyErr)
+        toast.warning('Entrega completada, pero falló el aviso por correo interno')
+      }
+
       toast.success('Orden cobrada y entregada')
-      onClose()
     } catch {
       toast.error('No se pudo completar la entrega')
+    }
+  }
+
+  async function handleNotifyReady() {
+    if (!hasClientEmail || sendingReadyEmail) return
+    const currentOrder = order
+    if (!currentOrder) return
+
+    setSendingReadyEmail(true)
+    try {
+      const response = await fetch('/api/notifications/order-ready', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderNumber: currentOrder.order_number,
+          clientName: currentOrder.client.name,
+          clientEmail: currentOrder.client.email,
+        }),
+      })
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null)
+        throw new Error(payload?.error ?? 'No se pudo enviar el correo al cliente')
+      }
+
+      toast.success('Correo enviado al cliente')
+    } catch (err) {
+      console.warn('[v0] order-ready email warning', err)
+      toast.error('No se pudo enviar el correo al cliente')
+    } finally {
+      setSendingReadyEmail(false)
     }
   }
 
@@ -202,6 +256,26 @@ export function OrderDetailDialog({
           <div className="flex flex-col gap-3 border-t border-border pt-4">
             {readyToDeliver ? (
               <>
+                <Button
+                  variant="outline"
+                  onClick={handleNotifyReady}
+                  disabled={!hasClientEmail || sendingReadyEmail}
+                >
+                  {sendingReadyEmail ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <>
+                      <Mail className="size-4" />
+                      Avisar cliente por correo
+                    </>
+                  )}
+                </Button>
+                {!hasClientEmail && (
+                  <p className="text-xs text-muted-foreground">
+                    No hay correo registrado para este cliente.
+                  </p>
+                )}
+
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="charged">Monto a cobrar</Label>
                   <Input

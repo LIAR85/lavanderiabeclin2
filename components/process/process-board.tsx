@@ -62,6 +62,12 @@ export function ProcessBoard() {
   const [page, setPage] = useState(1)
   const [selected, setSelected] = useState<OrderWithClient | null>(null)
 
+  useEffect(() => {
+    if (!selected || !orders) return
+    const fresh = orders.find((o) => o.id === selected.id)
+    if (fresh) setSelected(fresh)
+  }, [orders, selected])
+
   const counts = useMemo(() => {
     const c: Record<string, number> = { all: 0, active: 0 }
     for (const o of orders ?? []) {
@@ -163,8 +169,8 @@ export function ProcessBoard() {
       </div>
 
       <Card>
-        <CardContent className="grid gap-3 p-3 sm:grid-cols-2 lg:grid-cols-5">
-          <div className="flex flex-col gap-1.5">
+        <CardContent className="flex gap-3 overflow-x-auto p-3">
+          <div className="flex min-w-[210px] shrink-0 flex-col gap-1.5">
             <Label htmlFor="scope">Vista</Label>
             <Select
               id="scope"
@@ -176,7 +182,7 @@ export function ProcessBoard() {
             </Select>
           </div>
 
-          <div className="flex flex-col gap-1.5">
+          <div className="flex min-w-[250px] shrink-0 flex-col gap-1.5">
             <Label htmlFor="sort">Ordenar por</Label>
             <Select
               id="sort"
@@ -192,7 +198,7 @@ export function ProcessBoard() {
             </Select>
           </div>
 
-          <div className="flex flex-col gap-1.5">
+          <div className="flex min-w-[210px] shrink-0 flex-col gap-1.5">
             <Label htmlFor="mode">Tipo de orden</Label>
             <Select
               id="mode"
@@ -205,7 +211,7 @@ export function ProcessBoard() {
             </Select>
           </div>
 
-          <div className="flex flex-col gap-1.5">
+          <div className="flex min-w-[210px] shrink-0 flex-col gap-1.5">
             <Label htmlFor="created-date">Fecha de creación</Label>
             <Input
               id="created-date"
@@ -215,7 +221,7 @@ export function ProcessBoard() {
             />
           </div>
 
-          <div className="flex flex-col gap-1.5">
+          <div className="flex min-w-[250px] shrink-0 flex-col gap-1.5">
             <Label htmlFor="group-date">Dividir por fecha</Label>
             <Select
               id="group-date"
@@ -227,20 +233,6 @@ export function ProcessBoard() {
             </Select>
           </div>
 
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="page-size">Registros por página</Label>
-            <Select
-              id="page-size"
-              value={`${pageSize}`}
-              onChange={(e) => setPageSize(Number(e.target.value))}
-            >
-              {PAGE_SIZE_OPTIONS.map((size) => (
-                <option key={size} value={size}>
-                  {size}
-                </option>
-              ))}
-            </Select>
-          </div>
         </CardContent>
       </Card>
 
@@ -357,7 +349,24 @@ export function ProcessBoard() {
             <p className="text-sm text-muted-foreground">
               Mostrando {filtered.length === 0 ? 0 : start + 1} a {Math.min(start + pageSize, filtered.length)} de {filtered.length} órdenes
             </p>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-1.5">
+                <Label htmlFor="page-size-bottom" className="text-xs text-muted-foreground">
+                  Reg/pág
+                </Label>
+                <Select
+                  id="page-size-bottom"
+                  className="h-8 w-24 text-sm"
+                  value={`${pageSize}`}
+                  onChange={(e) => setPageSize(Number(e.target.value))}
+                >
+                  {PAGE_SIZE_OPTIONS.map((size) => (
+                    <option key={size} value={size}>
+                      {size}
+                    </option>
+                  ))}
+                </Select>
+              </div>
               <button
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={safePage <= 1}

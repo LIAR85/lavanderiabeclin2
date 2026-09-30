@@ -23,6 +23,12 @@ import { formatCurrency, formatDate } from '@/lib/format'
 import { getSettings } from '@/lib/local-store'
 import { enqueueOrder } from '@/lib/offline-queue'
 import { computePrice, computePromisedDate } from '@/lib/pricing'
+import { useOrders } from '@/lib/hooks'
+import {
+  getIroningPieceLimit,
+  getScheduledIroningPieces,
+  isIroningRestrictedService,
+} from '@/lib/schedule'
 import {
   createOrder,
   findClientByPhone,
@@ -39,6 +45,19 @@ import type {
 import { cn } from '@/lib/utils'
 
 const BAG_OPTIONS: BagSize[] = ['quarter', 'half', 'threequarter', 'full', 'custom']
+
+function toDateInput(d: Date): string {
+  const y = d.getFullYear()
+  const m = `${d.getMonth() + 1}`.padStart(2, '0')
+  const day = `${d.getDate()}`.padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+function toPromisedIsoAt3pm(dateInput: string): string {
+  const [y, m, d] = dateInput.split('-').map(Number)
+  const dt = new Date(y, (m || 1) - 1, d || 1, 15, 0, 0, 0)
+  return dt.toISOString()
+}
 
 function getErrorMessage(err: unknown): string {
   if (err instanceof Error && err.message) return err.message
@@ -83,6 +102,7 @@ export function NewOrderForm({
 }) {
   const qc = useQueryClient()
   const settings = useMemo(() => getSettings(), [])
+  const { data: orders } = useOrders()
 
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
@@ -97,6 +117,9 @@ export function NewOrderForm({
   const [customFactor, setCustomFactor] = useState('1')
   const [quantity, setQuantity] = useState('1')
   const [pieceCount, setPieceCount] = useState('')
+  const [deliveryDate, setDeliveryDate] = useState(() =>
+    toDateInput(computePromisedDate(settings, 'regular')),
+  )
 
   const [specialItems, setSpecialItems] = useState<SpecialItemInput[]>([])
   const [instructions, setInstructions] = useState<string[]>([])
@@ -149,9 +172,39 @@ export function NewOrderForm({
   )
 
   const promisedDate = useMemo(
-    () => computePromisedDate(settings, mode),
-    [settings, mode],
+    () => toPromisedIsoAt3pm(deliveryDate),
+    [deliveryDate],
   )
+
+  const ironingRestricted = useMemo(
+    () => isIroningRestrictedService(serviceType),
+    [serviceType],
+  )
+
+  const parsedPieceCount = useMemo(() => {
+    if (!pieceCount) return null
+    const n = Number.parseInt(pieceCount, 10)
+    if (!Number.isInteger(n) || n <= 0) return null
+    return n
+  }, [pieceCount])
+
+  const pieceCountValid = !ironingRestricted || parsedPieceCount != null
+
+  const ironingCapacity = useMemo(
+    () => getIroningPieceLimit(deliveryDate, serviceType),
+    [deliveryDate, serviceType],
+  )
+
+  const scheduledIroning = useMemo(
+    () => getScheduledIroningPieces(orders ?? [], deliveryDate, serviceType),
+    [orders, deliveryDate, serviceType],
+  )
+
+  const requestedIroningPieces = parsedPieceCount ?? 0
+  const hasCapacityForIroning =
+    !ironingRestricted ||
+    ironingCapacity == null ||
+    scheduledIroning + requestedIroningPieces <= ironingCapacity
 
   const chargeAmount = useMemo(() => {
     if (!manualChargeEnabled) return price.total
@@ -196,6 +249,7 @@ export function NewOrderForm({
     setCustomFactor('1')
     setQuantity('1')
     setPieceCount('')
+    setDeliveryDate(toDateInput(computePromisedDate(settings, 'regular')))
     setSpecialItems([])
     setInstructions([])
     setFreeInstruction('')
@@ -210,6 +264,7 @@ export function NewOrderForm({
     clientName: string
     clientEmail?: string
     serviceType: ServiceType
+    pieceCount?: number
     total: number
     promisedDateIso: string
   }) {
@@ -221,7 +276,8 @@ export function NewOrderForm({
 
     if (!response.ok) {
       const payload = await response.json().catch(() => null)
-      throw new Error(payload?.error ?? 'No se pudo enviar el correo de confirmacion')
+      const detail = [payload?.error, payload?.detail].filter(Boolean).join(' | ')
+      throw new Error(detail || 'No se pudo enviar el correo de confirmacion')
     }
   }
 
@@ -229,6 +285,18 @@ export function NewOrderForm({
     e.preventDefault()
     if (!name.trim() || phone.trim().length < 7) {
       toast.error('Captura nombre y teléfono válido del cliente')
+      return
+    }
+    if (!deliveryDate) {
+      toast.error('Selecciona una fecha de entrega')
+      return
+    }
+    if (!pieceCountValid) {
+      toast.error('Captura un número de piezas válido para este servicio')
+      return
+    }
+    if (!hasCapacityForIroning) {
+      toast.error('No hay capacidad disponible de piezas para la fecha seleccionada')
       return
     }
     if (manualChargeEnabled && chargeAmount <= 0) {
@@ -247,12 +315,12 @@ export function NewOrderForm({
       bag_size: bagSize,
       custom_bag_factor: Number(customFactor) || 1,
       quantity: Number(quantity) || 1,
-      estimated_piece_count: pieceCount ? Number(pieceCount) : undefined,
+      estimated_piece_count: parsedPieceCount ?? undefined,
       special_items: specialItems,
       customer_instructions: allInstructions || undefined,
       notes: notes.trim() || undefined,
       payment_timing: paymentTiming,
-      promised_date: promisedDate.toISOString(),
+      promised_date: promisedDate,
       subtotal: price.subtotal,
       extras_total: price.extrasTotal,
       total: price.total,
@@ -268,15 +336,19 @@ export function NewOrderForm({
         try {
           await sendOrderCreatedEmail({
             orderNumber: order.order_number,
-            clientName: name.trim(),
-            clientEmail: email.trim() || undefined,
-            serviceType,
+            clientName: order.client.name,
+            clientEmail: order.client.email ?? undefined,
+            serviceType: order.service_type,
+            pieceCount: order.estimated_piece_count ?? undefined,
             total: chargeAmount,
-            promisedDateIso: promisedDate.toISOString(),
+            promisedDateIso: order.promised_date ?? promisedDate,
           })
         } catch (emailErr) {
           console.warn('[v0] sendOrderCreatedEmail warning', emailErr)
-          toast.warning('Orden creada, pero no se pudo enviar el correo automatico')
+          const msg = getErrorMessage(emailErr)
+          toast.warning('Orden creada, pero no se pudo enviar el correo automatico', {
+            description: msg,
+          })
         }
 
         onCreated(order, false)
@@ -298,10 +370,10 @@ export function NewOrderForm({
           service_type: serviceType,
           service_mode: mode,
           bag_size: bagSize,
-          estimated_piece_count: pieceCount ? Number(pieceCount) : null,
+          estimated_piece_count: parsedPieceCount ?? null,
           estimated_weight: null,
           quantity: Number(quantity) || 1,
-          promised_date: promisedDate.toISOString(),
+          promised_date: promisedDate,
           subtotal: price.subtotal,
           extras_total: price.extrasTotal,
           total: price.total,
@@ -501,16 +573,54 @@ export function NewOrderForm({
                   onChange={(e) => setQuantity(e.target.value)}
                 />
               </div>
+              {ironingRestricted && (
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="pieces">Piezas estimadas (obligatorio)</Label>
+                  <Input
+                    id="pieces"
+                    inputMode="numeric"
+                    value={pieceCount}
+                    onChange={(e) => setPieceCount(e.target.value)}
+                    placeholder="Ej. 4 (imprime 4 tickets)"
+                    required={ironingRestricted}
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="pieces">Piezas estimadas (opcional)</Label>
+                <Label htmlFor="delivery-date">Fecha de entrega (obligatoria)</Label>
                 <Input
-                  id="pieces"
-                  inputMode="numeric"
-                  value={pieceCount}
-                  onChange={(e) => setPieceCount(e.target.value)}
-                  placeholder="Ej. 24"
+                  id="delivery-date"
+                  type="date"
+                  value={deliveryDate}
+                  min={toDateInput(new Date())}
+                  onChange={(e) => setDeliveryDate(e.target.value)}
+                  required
                 />
+                <span className="text-xs text-muted-foreground">
+                  Hora fija de entrega: 3:00 PM
+                </span>
               </div>
+              {ironingRestricted && (
+                <div className="flex flex-col justify-end gap-1.5 rounded-lg border border-border bg-muted/30 p-3 text-sm">
+                  <span className="font-600">Capacidad de piezas para ese día</span>
+                  <span className="text-muted-foreground">
+                    Programadas: {scheduledIroning} pieza(s) / Máximo: {ironingCapacity == null ? 'Sin límite' : `${ironingCapacity} pieza(s)`}
+                  </span>
+                  {pieceCountValid && parsedPieceCount != null && (
+                    <span className="text-muted-foreground">
+                      Esta orden agrega: {parsedPieceCount} pieza(s)
+                    </span>
+                  )}
+                  {!hasCapacityForIroning && (
+                    <span className="font-700 text-destructive">
+                      Día sin cupo suficiente de piezas para este servicio.
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -713,7 +823,12 @@ export function NewOrderForm({
 
             <Button
               type="submit"
-              disabled={submitting}
+              disabled={
+                submitting ||
+                !deliveryDate ||
+                !hasCapacityForIroning ||
+                (ironingRestricted && !pieceCountValid)
+              }
               className="h-12 w-full text-base font-800"
             >
               {submitting ? (

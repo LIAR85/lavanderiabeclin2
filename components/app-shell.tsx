@@ -1,9 +1,11 @@
 'use client'
 
-import { LayoutGrid, PlusCircle, ScanLine, ShieldCheck } from 'lucide-react'
+import { CalendarDays, Clock3, LayoutGrid, PlusCircle, ScanLine, ShieldCheck } from 'lucide-react'
 import Image from 'next/image'
 import { useState } from 'react'
 import { AdminView } from '@/components/admin/admin-view'
+import { DeliveryCalendar } from '@/components/calendar/delivery-calendar'
+import { CheckerView } from '@/components/checker/checker-view'
 import { NewOrderForm } from '@/components/counter/new-order-form'
 import { TicketDialog } from '@/components/counter/ticket-dialog'
 import { ProcessBoard } from '@/components/process/process-board'
@@ -12,12 +14,14 @@ import { useOnlineStatus } from '@/lib/hooks'
 import type { OrderWithClient } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
-type Tab = 'reception' | 'process' | 'scanner' | 'admin'
+type Tab = 'reception' | 'process' | 'scanner' | 'calendar' | 'checker' | 'admin'
 
 const NAV: { key: Tab; label: string; icon: typeof LayoutGrid }[] = [
   { key: 'reception', label: 'Recepción', icon: PlusCircle },
   { key: 'process', label: 'Proceso', icon: LayoutGrid },
   { key: 'scanner', label: 'Entrega', icon: ScanLine },
+  { key: 'calendar', label: 'Calendario', icon: CalendarDays },
+  { key: 'checker', label: 'Checador', icon: Clock3 },
   { key: 'admin', label: 'Admin', icon: ShieldCheck },
 ]
 
@@ -100,6 +104,8 @@ export function AppShell() {
         )}
         {tab === 'process' && <ProcessBoard />}
         {tab === 'scanner' && <ScannerView />}
+        {tab === 'calendar' && <DeliveryCalendar />}
+        {tab === 'checker' && <CheckerView />}
         {tab === 'admin' && <AdminView />}
       </main>
 
