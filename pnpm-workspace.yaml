@@ -7,5 +7,8 @@ minimumReleaseAgeExclude:
 
 allowBuilds:
   core-js: true
+  core-js@3.50.0: true
   esbuild: true
   workerd: true
+
+strictDepBuilds: false
