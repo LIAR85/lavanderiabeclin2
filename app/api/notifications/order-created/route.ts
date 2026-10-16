@@ -16,6 +16,11 @@ interface OrderCreatedPayload {
   clientEmail?: string
   serviceType?: ServiceType
   pieceCount?: number
+  orderLines?: Array<{
+    name?: string
+    quantity?: number
+    unitPrice?: number
+  }>
   total?: number
   promisedDateIso?: string
 }
@@ -75,6 +80,43 @@ export async function POST(request: Request) {
     typeof body.pieceCount === 'number' && Number.isFinite(body.pieceCount)
       ? Math.max(1, Math.floor(body.pieceCount))
       : null
+  const orderLines = (body.orderLines ?? [])
+    .filter(
+      (line) =>
+        line &&
+        typeof line.name === 'string' &&
+        line.name.trim().length > 0 &&
+        typeof line.quantity === 'number' &&
+        Number.isFinite(line.quantity) &&
+        line.quantity > 0 &&
+        typeof line.unitPrice === 'number' &&
+        Number.isFinite(line.unitPrice) &&
+        line.unitPrice >= 0,
+    )
+    .map((line) => ({
+      name: line.name!.trim(),
+      quantity: Math.max(1, Math.floor(line.quantity!)),
+      unitPrice: line.unitPrice!,
+    }))
+  const orderLinesHtml =
+    orderLines.length === 0
+      ? ''
+      : `<tr>
+          <td colspan="2" style="padding:10px 16px 12px; border-top:1px solid #e6f0ff;">
+            <div style="font-size:13px; font-weight:700; color:#334155; margin-bottom:6px;">Desglose</div>
+            ${orderLines
+              .map(
+                (line) => `<div style="display:flex; justify-content:space-between; gap:8px; font-size:12px; color:#334155; padding:2px 0;">
+                <span>${line.quantity} × ${line.name}</span>
+                <strong>${new Intl.NumberFormat('es-MX', {
+                  style: 'currency',
+                  currency: 'MXN',
+                }).format(line.quantity * line.unitPrice)}</strong>
+              </div>`,
+              )
+              .join('')}
+          </td>
+        </tr>`
 
   const subject = `Orden creada ${body.orderNumber}`
   const html = `
@@ -119,7 +161,7 @@ export async function POST(request: Request) {
                     <td style="padding:11px 16px; font-size:13px; color:#64748b; border-bottom:1px solid #e6f0ff;">Servicio</td>
                     <td style="padding:11px 16px; text-align:right; font-size:14px; font-weight:600; color:#1f2a44; border-bottom:1px solid #e6f0ff;">${serviceLabel}</td>
                   </tr>
-                  ${pieceCount && pieceCount > 1 ? `<tr>
+                  ${pieceCount ? `<tr>
                     <td style="padding:11px 16px; font-size:13px; color:#64748b; border-bottom:1px solid #e6f0ff;">Piezas recibidas</td>
                     <td style="padding:11px 16px; text-align:right; font-size:14px; font-weight:600; color:#1f2a44; border-bottom:1px solid #e6f0ff;">${pieceCount}</td>
                   </tr>` : ''}
@@ -127,6 +169,7 @@ export async function POST(request: Request) {
                     <td style="padding:11px 16px; font-size:13px; color:#64748b;">Entrega estimada</td>
                     <td style="padding:11px 16px; text-align:right; font-size:14px; font-weight:600; color:#1f2a44;">${promisedDate}</td>
                   </tr>
+                  ${orderLinesHtml}
                   <tr>
                     <td style="padding:14px 16px; font-size:15px; font-weight:700; color:#0f172a; background:#eff6ff; border-top:1px solid #d9e9ff;">Total</td>
                     <td style="padding:14px 16px; text-align:right; font-size:22px; font-weight:800; color:#1d4ed8; background:#eff6ff; border-top:1px solid #d9e9ff;">${total}</td>

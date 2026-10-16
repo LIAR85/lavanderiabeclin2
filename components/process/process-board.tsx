@@ -23,12 +23,16 @@ import type { OrderStatus, OrderWithClient } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { OrderDetailDialog } from './order-detail-dialog'
 
-const FILTERS: { key: OrderStatus | 'all' | 'active'; label: string }[] = [
+type FilterKey = OrderStatus | 'all' | 'active' | 'overdue' | 'urgent'
+
+const FILTERS: { key: FilterKey; label: string }[] = [
   { key: 'active', label: 'Activas' },
   { key: 'received', label: 'Recibidas' },
   { key: 'washing', label: 'En proceso' },
   { key: 'ready', label: 'Listas' },
   { key: 'delivered', label: 'Entregadas' },
+  { key: 'overdue', label: 'Vencidas' },
+  { key: 'urgent', label: 'Urgentes' },
   { key: 'all', label: 'Todas' },
 ]
 
@@ -52,7 +56,7 @@ function dateKeyFromIso(iso: string): string {
 
 export function ProcessBoard() {
   const { data: orders, isLoading } = useOrders()
-  const [filter, setFilter] = useState<(typeof FILTERS)[number]['key']>('active')
+  const [filter, setFilter] = useState<FilterKey>('active')
   const [search, setSearch] = useState('')
   const [modeFilter, setModeFilter] = useState<'all' | 'express' | 'regular'>('all')
   const [createdDateFilter, setCreatedDateFilter] = useState('')
@@ -69,10 +73,14 @@ export function ProcessBoard() {
   }, [orders, selected])
 
   const counts = useMemo(() => {
-    const c: Record<string, number> = { all: 0, active: 0 }
+    const c: Record<string, number> = { all: 0, active: 0, overdue: 0, urgent: 0 }
     for (const o of orders ?? []) {
       c.all++
-      if (o.status !== 'delivered') c.active++
+      if (o.status !== 'delivered') {
+        c.active++
+        if (isOverdue(o.promised_date)) c.overdue++
+        if (o.service_mode === 'express') c.urgent++
+      }
       c[o.status] = (c[o.status] ?? 0) + 1
     }
     return c
@@ -83,6 +91,10 @@ export function ProcessBoard() {
 
     if (filter === 'active') {
       list = list.filter((o) => o.status !== 'delivered')
+    } else if (filter === 'overdue') {
+      list = list.filter((o) => o.status !== 'delivered' && isOverdue(o.promised_date))
+    } else if (filter === 'urgent') {
+      list = list.filter((o) => o.status !== 'delivered' && o.service_mode === 'express')
     } else if (filter !== 'all') {
       list = list.filter((o) => o.status === filter)
     }
@@ -157,7 +169,7 @@ export function ProcessBoard() {
   }, [groupByDate, pageItems])
 
   return (
-    <div className="mx-auto flex max-w-5xl flex-col gap-4">
+    <div className="flex w-full flex-col gap-4">
       <div className="relative">
         <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
         <Input
@@ -245,7 +257,9 @@ export function ProcessBoard() {
               'flex shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-2 text-sm font-700 transition-colors',
               filter === f.key
                 ? 'border-primary bg-primary text-primary-foreground'
-                : 'border-input bg-background text-foreground',
+                : f.key === 'overdue' && (counts.overdue ?? 0) > 0
+                  ? 'border-destructive/50 bg-destructive/10 text-destructive'
+                  : 'border-input bg-background text-foreground',
             )}
           >
             {f.label}
@@ -288,7 +302,7 @@ export function ProcessBoard() {
                 </div>
               )}
 
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                 {group.items.map((order) => {
                   const overdue =
                     order.status !== 'delivered' && isOverdue(order.promised_date)

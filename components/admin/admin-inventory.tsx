@@ -23,6 +23,10 @@ export function AdminInventory() {
   const [cards, setCards] = useState<InventoryCard[]>([])
   const [newName, setNewName] = useState('')
   const [newUnit, setNewUnit] = useState('L')
+  const [periodMonth, setPeriodMonth] = useState(() => {
+    const d = new Date()
+    return `${d.getFullYear()}-${`${d.getMonth() + 1}`.padStart(2, '0')}`
+  })
   const [purchaseFor, setPurchaseFor] = useState<InventoryCard | null>(null)
 
   useEffect(() => {
@@ -59,10 +63,29 @@ export function AdminInventory() {
     )
   }
 
+  const periodTotal = cards
+    .flatMap((c) => c.purchases)
+    .filter((p) => (p.date || '').slice(0, 7) === periodMonth)
+    .reduce((sum, p) => sum + (p.price || 0), 0)
+
   return (
     <div className="flex flex-col gap-4">
       <Card>
         <CardContent className="p-4">
+          <div className="mb-3 grid gap-2 sm:grid-cols-[220px_1fr] sm:items-end">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="inv-period">Mes del periodo</Label>
+              <Input
+                id="inv-period"
+                type="month"
+                value={periodMonth}
+                onChange={(e) => setPeriodMonth(e.target.value)}
+              />
+            </div>
+            <div className="rounded-lg border border-border px-3 py-2 text-sm">
+              Total de compras del periodo: <strong>{formatCurrency(periodTotal)}</strong>
+            </div>
+          </div>
           <form onSubmit={addCard} className="flex flex-col gap-3 sm:flex-row sm:items-end">
             <div className="flex flex-1 flex-col gap-1.5">
               <Label htmlFor="inv-name">Nuevo insumo</Label>
@@ -138,7 +161,7 @@ export function AdminInventory() {
                     {card.purchases.slice(0, 3).map((p) => (
                       <li key={p.id} className="flex justify-between">
                         <span>
-                          {p.quantity} {card.unit} · {p.brand || 'genérico'}
+                          {p.quantity} {card.unit} · {p.brand || 'genérico'} · {(p.date || '').slice(0, 10)}
                         </span>
                         <span>{formatCurrency(p.price)}</span>
                       </li>
@@ -191,6 +214,7 @@ function PurchaseDialog({
   const [presentation, setPresentation] = useState('')
   const [brand, setBrand] = useState('')
   const [price, setPrice] = useState('')
+  const [purchaseDate, setPurchaseDate] = useState('')
 
   useEffect(() => {
     if (card) {
@@ -198,6 +222,7 @@ function PurchaseDialog({
       setPresentation('')
       setBrand('')
       setPrice('')
+      setPurchaseDate(new Date().toISOString().slice(0, 10))
     }
   }, [card])
 
@@ -211,7 +236,7 @@ function PurchaseDialog({
       presentation: presentation.trim(),
       brand: brand.trim(),
       price: Number(price) || 0,
-      date: new Date().toISOString(),
+      date: purchaseDate ? new Date(`${purchaseDate}T12:00:00`).toISOString() : new Date().toISOString(),
     })
   }
 
@@ -253,6 +278,15 @@ function PurchaseDialog({
             value={presentation}
             onChange={(e) => setPresentation(e.target.value)}
             placeholder="Garrafa 20 L, caja 12 pza…"
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="p-date">Fecha de compra</Label>
+          <Input
+            id="p-date"
+            type="date"
+            value={purchaseDate}
+            onChange={(e) => setPurchaseDate(e.target.value)}
           />
         </div>
         <Button type="submit" className="h-11 font-800">

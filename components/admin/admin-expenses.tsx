@@ -10,18 +10,15 @@ import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { EXPENSE_CATEGORIES } from '@/lib/config'
 import { formatCurrency, formatDate } from '@/lib/format'
-import {
-  type Expense,
-  getExpenses,
-  saveExpenses,
-  uid,
-} from '@/lib/local-store'
+import { type Expense, getExpenses, saveExpenses, uid } from '@/lib/local-store'
 
 export function AdminExpenses() {
   const [expenses, setExpenses] = useState<Expense[]>([])
+  const [editingId, setEditingId] = useState<string | null>(null)
   const [concept, setConcept] = useState('')
   const [amount, setAmount] = useState('')
   const [category, setCategory] = useState(EXPENSE_CATEGORIES[0])
+  const [expenseDate, setExpenseDate] = useState(() => new Date().toISOString().slice(0, 10))
 
   useEffect(() => {
     setExpenses(getExpenses())
@@ -32,22 +29,47 @@ export function AdminExpenses() {
     saveExpenses(next)
   }
 
-  function add(e: React.FormEvent) {
-    e.preventDefault()
-    if (!concept.trim() || !amount) return
-    persist([
-      {
-        id: uid(),
-        concept: concept.trim(),
-        amount: Number(amount) || 0,
-        category,
-        date: new Date().toISOString(),
-      },
-      ...expenses,
-    ])
+  function clearForm() {
+    setEditingId(null)
     setConcept('')
     setAmount('')
-    toast.success('Gasto registrado')
+    setCategory(EXPENSE_CATEGORIES[0])
+    setExpenseDate(new Date().toISOString().slice(0, 10))
+  }
+
+  function submitExpense(e: React.FormEvent) {
+    e.preventDefault()
+    if (!concept.trim() || !amount) return
+    const payload: Expense = {
+      id: editingId ?? uid(),
+      concept: concept.trim(),
+      amount: Number(amount) || 0,
+      category,
+      date: expenseDate
+        ? new Date(`${expenseDate}T12:00:00`).toISOString()
+        : new Date().toISOString(),
+    }
+    if (editingId) {
+      persist(expenses.map((entry) => (entry.id === editingId ? payload : entry)))
+      toast.success('Gasto actualizado')
+    } else {
+      persist([payload, ...expenses])
+      toast.success('Gasto registrado')
+    }
+    clearForm()
+  }
+
+  function startEdit(expense: Expense) {
+    setEditingId(expense.id)
+    setConcept(expense.concept)
+    setAmount(String(expense.amount))
+    setCategory(expense.category)
+    setExpenseDate((expense.date || '').slice(0, 10))
+  }
+
+  function removeExpense(id: string) {
+    persist(expenses.filter((x) => x.id !== id))
+    if (editingId === id) clearForm()
   }
 
   const monthTotal = useMemo(() => {
@@ -73,7 +95,7 @@ export function AdminExpenses() {
 
       <Card>
         <CardContent className="p-4">
-          <form onSubmit={add} className="flex flex-col gap-3">
+          <form onSubmit={submitExpense} className="flex flex-col gap-3">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="ex-concept">Concepto</Label>
               <Input
@@ -108,9 +130,25 @@ export function AdminExpenses() {
                 </Select>
               </div>
             </div>
-            <Button type="submit" className="font-700">
-              <Plus className="size-4" /> Registrar gasto
-            </Button>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="ex-date">Fecha del gasto</Label>
+              <Input
+                id="ex-date"
+                type="date"
+                value={expenseDate}
+                onChange={(e) => setExpenseDate(e.target.value)}
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button type="submit" className="font-700">
+                <Plus className="size-4" /> {editingId ? 'Guardar cambios' : 'Registrar gasto'}
+              </Button>
+              {editingId && (
+                <Button type="button" variant="outline" onClick={clearForm}>
+                  Cancelar edición
+                </Button>
+              )}
+            </div>
           </form>
         </CardContent>
       </Card>
@@ -136,12 +174,15 @@ export function AdminExpenses() {
                     {e.category} · {formatDate(e.date)}
                   </span>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
                   <span className="font-700 text-destructive">
                     {formatCurrency(e.amount)}
                   </span>
+                  <Button variant="outline" size="sm" onClick={() => startEdit(e)}>
+                    Editar
+                  </Button>
                   <button
-                    onClick={() => persist(expenses.filter((x) => x.id !== e.id))}
+                    onClick={() => removeExpense(e.id)}
                     className="text-muted-foreground transition-colors hover:text-destructive"
                     aria-label="Eliminar gasto"
                   >

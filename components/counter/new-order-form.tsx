@@ -1,23 +1,33 @@
 'use client'
 
 import { useQueryClient } from '@tanstack/react-query'
-import { Check, Loader2, Plus, Search, Trash2, Zap } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import {
+  CalendarDays,
+  Check,
+  ChevronDown,
+  Loader2,
+  Search,
+  Zap,
+} from 'lucide-react'
+import { useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import {
-  BAG_LABELS,
+  formatAmount,
   INSTRUCTION_PRESETS,
   MODE_LABELS,
   SERVICE_LABELS,
   SERVICE_ORDER,
-  SPECIAL_ITEMS_CATALOG,
+  SERVICE_UNIT,
+  SERVICE_VARIANTS,
+  type ServiceVariant,
+  UNIT_LABELS,
+  variantPrice,
 } from '@/lib/config'
 import { formatCurrency, formatDate } from '@/lib/format'
 import { getSettings } from '@/lib/local-store'
@@ -43,8 +53,32 @@ import type {
   SpecialItemInput,
 } from '@/lib/types'
 import { cn } from '@/lib/utils'
+import { SERVICE_ICONS } from './service-icons'
 
-const BAG_OPTIONS: BagSize[] = ['quarter', 'half', 'threequarter', 'full', 'custom']
+const FRACTION_OPTIONS: Exclude<BagSize, 'full' | 'custom'>[] = [
+  'quarter',
+  'half',
+  'threequarter',
+]
+const COUNT_OPTIONS = [1, 2, 3, 5, 10]
+const FRACTION_SYMBOLS: Record<(typeof FRACTION_OPTIONS)[number], string> = {
+  quarter: '¼',
+  half: '½',
+  threequarter: '¾',
+}
+type ServiceAmountSelection = {
+  bagSize: BagSize
+  quantity: string
+  manualAmount: boolean
+  touched: boolean
+}
+
+const DEFAULT_AMOUNT_SELECTION: ServiceAmountSelection = {
+  bagSize: 'full',
+  quantity: '1',
+  manualAmount: false,
+  touched: false,
+}
 
 function toDateInput(d: Date): string {
   const y = d.getFullYear()
@@ -113,13 +147,22 @@ export function NewOrderForm({
 
   const [serviceType, setServiceType] = useState<ServiceType>('lavado')
   const [mode, setMode] = useState<ServiceMode>('regular')
-  const [bagSize, setBagSize] = useState<BagSize>('full')
-  const [customFactor, setCustomFactor] = useState('1')
-  const [quantity, setQuantity] = useState('1')
+  const [amountByService, setAmountByService] = useState<
+    Partial<Record<ServiceType, ServiceAmountSelection>>
+  >({})
+  const [variantQtyByService, setVariantQtyByService] = useState<
+    Partial<Record<ServiceType, Record<string, number>>>
+  >({})
+  const [otherDescription, setOtherDescription] = useState('')
+  const [otherUnitPrice, setOtherUnitPrice] = useState('')
   const [pieceCount, setPieceCount] = useState('')
   const [deliveryDate, setDeliveryDate] = useState(() =>
     toDateInput(computePromisedDate(settings, 'regular')),
   )
+  const [editingDate, setEditingDate] = useState(false)
+  const [dateTouched, setDateTouched] = useState(false)
+  const [showInstructions, setShowInstructions] = useState(false)
+  const nameRef = useRef<HTMLInputElement>(null)
 
   const [specialItems, setSpecialItems] = useState<SpecialItemInput[]>([])
   const [instructions, setInstructions] = useState<string[]>([])
@@ -132,43 +175,245 @@ export function NewOrderForm({
   const [notes, setNotes] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
-  // Phone lookup (debounced)
-  useEffect(() => {
+  async function lookupPhone() {
     const clean = phone.trim()
-    if (clean.length < 7 || !online) {
-      setLookupState('idle')
+    if (clean.length < 7) {
+      toast.error('Captura un teléfono válido para buscar al cliente')
+      return
+    }
+    if (!online) {
+      toast.warning('Sin conexión: no se puede buscar al cliente')
       return
     }
     setLookupState('searching')
-    const t = setTimeout(async () => {
-      try {
-        const client = await findClientByPhone(clean)
-        if (client) {
-          setName(client.name)
-          setEmail(client.email ?? '')
-          setLookupState('found')
-        } else {
-          setLookupState('new')
-        }
-      } catch {
-        setLookupState('idle')
+    try {
+      const client = await findClientByPhone(clean)
+      if (client) {
+        setName(client.name)
+        setEmail(client.email ?? '')
+        setLookupState('found')
+      } else {
+        setLookupState('new')
+        nameRef.current?.focus()
       }
-    }, 450)
-    return () => clearTimeout(t)
-  }, [phone, online])
+    } catch {
+      setLookupState('idle')
+      toast.error('No se pudo buscar al cliente')
+    }
+  }
+
+  function handlePhoneChange(value: string) {
+    setPhone(value)
+    if (lookupState === 'found') {
+      setName('')
+      setEmail('')
+    }
+    if (lookupState !== 'idle') setLookupState('idle')
+  }
+
+  function serviceAmountSelection(
+    service: ServiceType,
+    source: Partial<Record<ServiceType, ServiceAmountSelection>> = amountByService,
+  ): ServiceAmountSelection {
+    return source[service] ?? DEFAULT_AMOUNT_SELECTION
+  }
+
+  function updateServiceAmount(
+    service: ServiceType,
+    updater: (current: ServiceAmountSelection) => ServiceAmountSelection,
+  ) {
+    setAmountByService((prev) => ({
+      ...prev,
+      [service]: updater(serviceAmountSelection(service, prev)),
+    }))
+  }
+
+  function selectService(next: ServiceType) {
+    if (next === serviceType) return
+    setServiceType(next)
+  }
+
+  function selectMode(next: ServiceMode) {
+    setMode(next)
+    if (!dateTouched) {
+      setDeliveryDate(toDateInput(computePromisedDate(settings, next)))
+    }
+  }
+
+  function pickFraction(size: Exclude<BagSize, 'full' | 'custom'>) {
+    updateServiceAmount(serviceType, (current) => ({
+      ...current,
+      bagSize: size,
+      quantity: '1',
+      manualAmount: false,
+      touched: true,
+    }))
+  }
+
+  function pickCount(n: number) {
+    updateServiceAmount(serviceType, (current) => ({
+      ...current,
+      bagSize: 'full',
+      quantity: String(n),
+      manualAmount: false,
+      touched: true,
+    }))
+  }
+
+  function setVariantCount(key: string, value: number) {
+    setVariantQtyByService((prev) => ({
+      ...prev,
+      [serviceType]: {
+        ...(prev[serviceType] ?? {}),
+        [key]: Math.max(0, Math.min(999, value)),
+      },
+    }))
+  }
+
+  function pickManual() {
+    updateServiceAmount(serviceType, (current) => ({
+      ...current,
+      bagSize: 'full',
+      quantity: '',
+      manualAmount: true,
+      touched: true,
+    }))
+  }
+
+  const currentAmount = serviceAmountSelection(serviceType)
+  const bagSize = currentAmount.bagSize
+  const quantity = currentAmount.quantity
+  const manualAmount = currentAmount.manualAmount
+  const variants = SERVICE_VARIANTS[serviceType]
+  const currentVariantQty = variantQtyByService[serviceType] ?? {}
+  const otherLine = useMemo<SpecialItemInput | null>(() => {
+    if (serviceType !== 'otro') return null
+    const unitPrice = Number(otherUnitPrice)
+    const qty = Number(quantity) || 0
+    if (!otherDescription.trim() || !Number.isFinite(unitPrice) || unitPrice <= 0 || qty <= 0) {
+      return null
+    }
+    return {
+      name: `Otro · ${otherDescription.trim()}`,
+      quantity: qty,
+      unit_price: unitPrice,
+      kind: 'service',
+      variant_key: 'otro:manual',
+    }
+  }, [otherDescription, otherUnitPrice, quantity, serviceType])
+  const baseServiceLines = useMemo<SpecialItemInput[] | undefined>(() => {
+    const lines: SpecialItemInput[] = []
+    for (const s of SERVICE_ORDER) {
+      if (SERVICE_VARIANTS[s] || s === 'otro') continue
+      const selected = s === serviceType ? currentAmount : amountByService[s]
+      if (!selected) continue
+      if (s !== serviceType && !selected.touched) continue
+
+      const qty = Number.parseInt(selected.quantity, 10)
+      if (!Number.isInteger(qty) || qty <= 0) continue
+
+      const unitPrice =
+        (settings.basePrices[s] ?? 0) *
+        (SERVICE_UNIT[s] === 'bolsa' && selected.bagSize !== 'full'
+          ? settings.bagFactors[selected.bagSize as Exclude<BagSize, 'custom'>] ?? 1
+          : 1)
+
+      lines.push({
+        name: `${SERVICE_LABELS[s]} · ${formatAmount(s, selected.bagSize, qty)}`,
+        quantity: qty,
+        unit_price: unitPrice,
+        kind: 'service',
+        variant_key: `${s}:base`,
+      })
+    }
+    return lines.length > 0 ? lines : undefined
+  }, [amountByService, currentAmount, serviceType, settings])
+  const allServiceLines = useMemo<SpecialItemInput[] | undefined>(() => {
+    const lines: SpecialItemInput[] = []
+    lines.push(...(baseServiceLines ?? []))
+    for (const s of SERVICE_ORDER) {
+      const serviceVariants = SERVICE_VARIANTS[s]
+      if (!serviceVariants) continue
+      const qtyByKey = variantQtyByService[s] ?? {}
+      for (const v of serviceVariants) {
+        const q = qtyByKey[v.key] ?? 0
+        if (q <= 0) continue
+        lines.push({
+          name: `${SERVICE_LABELS[s]} · ${v.fullLabel ?? v.label}`,
+          quantity: q,
+          unit_price: variantPrice(settings, s, v),
+          kind: v.addon ? ('addon' as const) : ('service' as const),
+          variant_key: `${s}:${v.key}`,
+        })
+      }
+    }
+    return lines.length > 0 ? lines : undefined
+  }, [baseServiceLines, settings, variantQtyByService])
+  const globalServiceLines = useMemo<SpecialItemInput[] | undefined>(() => {
+    const lines = [...(allServiceLines ?? [])]
+    if (otherLine) lines.push(otherLine)
+    return lines.length > 0 ? lines : undefined
+  }, [allServiceLines, otherLine])
+  const selectedServiceTypes = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          (globalServiceLines ?? [])
+            .filter((l) => l.kind !== 'addon')
+            .map((l) => l.variant_key?.split(':')[0])
+            .filter(Boolean),
+        ),
+      ) as ServiceType[],
+    [globalServiceLines],
+  )
+  const bagVariantMode = !!variants?.some((v) => v.bagFactor)
+  const equivalentBags = bagVariantMode
+    ? variants!.reduce(
+        (sum, v) => sum + (currentVariantQty[v.key] ?? 0) * (v.bagFactor ?? 0),
+        0,
+      )
+    : 0
+  const onlyHalfBags =
+    bagVariantMode &&
+    variants!.every((v) => (currentVariantQty[v.key] ?? 0) === 0 || v.bagFactor === 0.5)
+  const linesQty = variants
+    ? variants.reduce(
+        (sum, v) => sum + (v.addon ? 0 : (currentVariantQty[v.key] ?? 0)),
+        0,
+      )
+    : 0
+  const globalLinesQty = (globalServiceLines ?? []).reduce(
+    (sum, l) => sum + (l.kind === 'addon' ? 0 : l.quantity),
+    0,
+  )
+  const amountQty = globalServiceLines
+    ? globalLinesQty
+    : Number(quantity)
+  const storedBagSize: BagSize =
+    bagVariantMode && onlyHalfBags && linesQty > 0 ? 'half' : bagSize
+  const serviceTypeForOrder =
+    selectedServiceTypes.length === 1 ? selectedServiceTypes[0] : serviceType
 
   const price = useMemo(
     () =>
       computePrice({
         settings,
-        serviceType,
+        serviceType: serviceTypeForOrder,
         serviceMode: mode,
-        bagSize,
-        quantity: Number(quantity) || 1,
-        customBagFactor: Number(customFactor) || 1,
+        bagSize: storedBagSize,
+        quantity: amountQty || 1,
+        serviceLines: globalServiceLines,
         specialItems,
       }),
-    [settings, serviceType, mode, bagSize, quantity, customFactor, specialItems],
+    [
+      settings,
+      serviceTypeForOrder,
+      mode,
+      storedBagSize,
+      amountQty,
+      globalServiceLines,
+      specialItems,
+    ],
   )
 
   const promisedDate = useMemo(
@@ -212,26 +457,6 @@ export function NewOrderForm({
     return Number.isFinite(parsed) && parsed > 0 ? parsed : 0
   }, [manualChargeAmount, manualChargeEnabled, price.total])
 
-  function addSpecialItem(name: string, unit_price: number) {
-    setSpecialItems((prev) => {
-      const existing = prev.find((i) => i.name === name)
-      if (existing) {
-        return prev.map((i) =>
-          i.name === name ? { ...i, quantity: i.quantity + 1 } : i,
-        )
-      }
-      return [...prev, { name, quantity: 1, unit_price }]
-    })
-  }
-
-  function updateItemQty(name: string, delta: number) {
-    setSpecialItems((prev) =>
-      prev
-        .map((i) => (i.name === name ? { ...i, quantity: i.quantity + delta } : i))
-        .filter((i) => i.quantity > 0),
-    )
-  }
-
   function toggleInstruction(preset: string) {
     setInstructions((prev) =>
       prev.includes(preset) ? prev.filter((p) => p !== preset) : [...prev, preset],
@@ -245,11 +470,15 @@ export function NewOrderForm({
     setLookupState('idle')
     setServiceType('lavado')
     setMode('regular')
-    setBagSize('full')
-    setCustomFactor('1')
-    setQuantity('1')
+    setAmountByService({})
+    setVariantQtyByService({})
     setPieceCount('')
+    setOtherDescription('')
+    setOtherUnitPrice('')
     setDeliveryDate(toDateInput(computePromisedDate(settings, 'regular')))
+    setEditingDate(false)
+    setDateTouched(false)
+    setShowInstructions(false)
     setSpecialItems([])
     setInstructions([])
     setFreeInstruction('')
@@ -265,6 +494,7 @@ export function NewOrderForm({
     clientEmail?: string
     serviceType: ServiceType
     pieceCount?: number
+    orderLines?: Array<{ name: string; quantity: number; unitPrice: number }>
     total: number
     promisedDateIso: string
   }) {
@@ -291,6 +521,16 @@ export function NewOrderForm({
       toast.error('Selecciona una fecha de entrega')
       return
     }
+    if (!(amountQty > 0)) {
+      toast.error(
+        variants ? 'Agrega al menos una pieza (los extras solos no cuentan)' : 'Captura la cantidad del servicio',
+      )
+      return
+    }
+    if (serviceType === 'otro' && !otherLine) {
+      toast.error('En "Otro" captura descripción, precio y cantidad válidos')
+      return
+    }
     if (!pieceCountValid) {
       toast.error('Captura un número de piezas válido para este servicio')
       return
@@ -307,15 +547,27 @@ export function NewOrderForm({
       ...instructions,
       ...(freeInstruction.trim() ? [freeInstruction.trim()] : []),
     ].join(' · ')
+    const emailOrderLines = [
+      ...((globalServiceLines ?? []).map((line) => ({
+        name: line.name,
+        quantity: line.quantity,
+        unitPrice: line.unit_price,
+      })) ?? []),
+      ...specialItems.map((line) => ({
+        name: `Especial · ${line.name}`,
+        quantity: line.quantity,
+        unitPrice: line.unit_price,
+      })),
+    ]
 
     const input: NewOrderInput = {
       client: { name: name.trim(), phone: phone.trim(), email: email.trim() || undefined },
-      service_type: serviceType,
+      service_type: serviceTypeForOrder,
       service_mode: mode,
-      bag_size: bagSize,
-      custom_bag_factor: Number(customFactor) || 1,
-      quantity: Number(quantity) || 1,
+      bag_size: storedBagSize,
+      quantity: amountQty || 1,
       estimated_piece_count: parsedPieceCount ?? undefined,
+      service_lines: globalServiceLines,
       special_items: specialItems,
       customer_instructions: allInstructions || undefined,
       notes: notes.trim() || undefined,
@@ -339,7 +591,8 @@ export function NewOrderForm({
             clientName: order.client.name,
             clientEmail: order.client.email ?? undefined,
             serviceType: order.service_type,
-            pieceCount: order.estimated_piece_count ?? undefined,
+            pieceCount: amountQty || undefined,
+            orderLines: emailOrderLines,
             total: chargeAmount,
             promisedDateIso: order.promised_date ?? promisedDate,
           })
@@ -367,12 +620,12 @@ export function NewOrderForm({
           id: order_number,
           order_number,
           client_id: 'offline',
-          service_type: serviceType,
+          service_type: serviceTypeForOrder,
           service_mode: mode,
-          bag_size: bagSize,
+          bag_size: storedBagSize,
           estimated_piece_count: parsedPieceCount ?? null,
           estimated_weight: null,
-          quantity: Number(quantity) || 1,
+          quantity: amountQty || 1,
           promised_date: promisedDate,
           subtotal: price.subtotal,
           extras_total: price.extrasTotal,
@@ -423,60 +676,122 @@ export function NewOrderForm({
     }
   }
 
+  const unit = SERVICE_UNIT[serviceType]
+  const unitLabels = UNIT_LABELS[unit]
+  const isBagUnit = unit === 'bolsa'
+  const showBagFramePrices =
+    serviceType === 'lavado' || serviceType === 'lavado_planchado' || serviceType === 'secado'
+  const baseBagPrice = (settings.basePrices[serviceType] ?? 0) * (mode === 'express' ? settings.expressMultiplier : 1)
+  function bagOptionPrice(factor: number) {
+    return formatCurrency(baseBagPrice * factor)
+  }
+  const hasMixedServices = selectedServiceTypes.length > 1
+  const instructionsCount = instructions.length + (freeInstruction.trim() ? 1 : 0)
+  const quickBreakdown = useMemo(() => {
+    const serviceRows = (globalServiceLines ?? []).map((line) => ({
+      label: line.name,
+      quantity: line.quantity,
+      amount: line.quantity * line.unit_price,
+    }))
+    const extrasRows = specialItems.map((item) => ({
+      label: `Especial · ${item.name}`,
+      quantity: item.quantity,
+      amount: item.quantity * item.unit_price,
+    }))
+    return [...serviceRows, ...extrasRows]
+  }, [globalServiceLines, specialItems])
+
   return (
-    <form onSubmit={handleSubmit} className="mx-auto grid max-w-5xl gap-4 lg:grid-cols-[1fr_340px]">
-      <div className="flex flex-col gap-4">
+    <form
+      onSubmit={handleSubmit}
+      autoComplete="off"
+      className="grid w-full gap-4 lg:grid-cols-[minmax(0,1fr)_380px] xl:grid-cols-[minmax(0,1fr)_420px]"
+    >
+      <div className="flex min-w-0 flex-col gap-4">
         {/* Client */}
         <Card>
           <CardHeader>
             <CardTitle>Cliente</CardTitle>
           </CardHeader>
-          <CardContent className="grid gap-4 sm:grid-cols-2">
+          <CardContent className="grid gap-4 md:grid-cols-3">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="phone">Teléfono</Label>
               <div className="relative">
                 <Input
                   id="phone"
+                  name="beclin-cliente-telefono"
+                  type="tel"
                   inputMode="tel"
+                  autoComplete="off"
+                  data-lpignore="true"
+                  data-1p-ignore="true"
                   value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="10 dígitos"
+                  onChange={(e) => handlePhoneChange(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      void lookupPhone()
+                    }
+                  }}
+                  placeholder="10 dígitos y presiona Enter"
+                  className="pr-11"
                 />
-                <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                  {lookupState === 'searching' && (
-                    <Loader2 className="size-4 animate-spin text-muted-foreground" />
-                  )}
-                  {lookupState === 'found' && (
+                <button
+                  type="button"
+                  onClick={() => void lookupPhone()}
+                  disabled={lookupState === 'searching'}
+                  aria-label="Buscar cliente por teléfono"
+                  className="absolute right-1.5 top-1/2 flex size-8 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                >
+                  {lookupState === 'searching' ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : lookupState === 'found' ? (
                     <Check className="size-4 text-success" />
+                  ) : (
+                    <Search className="size-4" />
                   )}
-                  {lookupState === 'idle' && (
-                    <Search className="size-4 text-muted-foreground" />
-                  )}
-                </div>
+                </button>
               </div>
               {lookupState === 'found' && (
                 <span className="text-xs font-600 text-success">
-                  Cliente frecuente — datos autocompletados
+                  Cliente frecuente — datos cargados
                 </span>
               )}
               {lookupState === 'new' && (
-                <span className="text-xs text-muted-foreground">Cliente nuevo</span>
+                <span className="text-xs text-muted-foreground">
+                  Cliente nuevo — captura su nombre
+                </span>
+              )}
+              {(lookupState === 'idle' || lookupState === 'searching') && (
+                <span className="text-xs text-muted-foreground">
+                  Presiona Enter para buscar al cliente
+                </span>
               )}
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="name">Nombre</Label>
               <Input
                 id="name"
+                ref={nameRef}
+                name="beclin-cliente-nombre"
+                autoComplete="off"
+                autoCorrect="off"
+                data-lpignore="true"
+                data-1p-ignore="true"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Nombre completo"
               />
             </div>
-            <div className="flex flex-col gap-1.5 sm:col-span-2">
+            <div className="flex flex-col gap-1.5">
               <Label htmlFor="email">Email (opcional)</Label>
               <Input
                 id="email"
+                name="beclin-cliente-email"
                 type="email"
+                autoComplete="off"
+                data-lpignore="true"
+                data-1p-ignore="true"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="correo@ejemplo.com"
@@ -490,32 +805,200 @@ export function NewOrderForm({
           <CardHeader>
             <CardTitle>Servicio</CardTitle>
           </CardHeader>
-          <CardContent className="flex flex-col gap-4">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="service">Tipo de servicio</Label>
-                <Select
-                  id="service"
-                  value={serviceType}
-                  onChange={(e) => setServiceType(e.target.value as ServiceType)}
-                >
-                  {SERVICE_ORDER.map((s) => (
-                    <option key={s} value={s}>
-                      {SERVICE_LABELS[s]}
-                    </option>
-                  ))}
-                </Select>
+          <CardContent className="flex flex-col gap-5">
+            <div className="flex flex-col gap-2">
+              <Label>Tipo de servicio</Label>
+              <div
+                role="radiogroup"
+                aria-label="Tipo de servicio"
+                className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-10"
+              >
+                {SERVICE_ORDER.map((s) => {
+                  const Icon = SERVICE_ICONS[s]
+                  const selected = serviceType === s
+                  return (
+                    <button
+                      key={s}
+                      type="button"
+                      role="radio"
+                      aria-checked={selected}
+                      onClick={() => selectService(s)}
+                      className={cn(
+                        'flex flex-col items-center justify-center gap-2 rounded-xl border-2 p-3 text-center transition-all',
+                        selected
+                          ? 'border-primary bg-primary/10 text-primary shadow-sm'
+                          : 'border-input bg-background text-foreground hover:border-primary/50 hover:bg-accent',
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          'flex size-14 items-center justify-center rounded-full',
+                          selected
+                            ? 'bg-primary text-primary-foreground'
+                            : 'bg-muted text-muted-foreground',
+                        )}
+                      >
+                        <Icon className="size-8" />
+                      </span>
+                      <span className="text-sm font-800 leading-tight">
+                        {SERVICE_LABELS[s]}
+                      </span>
+                      <span className="text-xs font-500 text-muted-foreground">
+                        por {UNIT_LABELS[SERVICE_UNIT[s]].singular}
+                      </span>
+                    </button>
+                  )
+                })}
               </div>
-              <div className="flex flex-col gap-1.5">
+              {selectedServiceTypes.length > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  En esta orden:{' '}
+                  {selectedServiceTypes
+                    .map((s) => SERVICE_LABELS[s])
+                    .join(hasMixedServices ? ' + ' : '')}
+                </p>
+              )}
+            </div>
+
+            <div className="grid animate-in gap-5 fade-in slide-in-from-top-1 xl:grid-cols-[minmax(0,1fr)_minmax(0,320px)]">
+              <div className="flex flex-col gap-2">
+                {variants ? (
+                  <>
+                    <Label>¿Qué piezas recibes? Toca para sumar</Label>
+                    {groupVariants(variants).map(({ group, items }) => (
+                      <div key={group ?? 'all'} className="flex flex-col gap-2">
+                        {group && (
+                          <span className="border-b border-border pb-1 text-sm font-800 uppercase tracking-wide text-primary">
+                            {group}
+                          </span>
+                        )}
+                        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 2xl:grid-cols-5">
+                          {items.map((v) => (
+                            <VariantTile
+                              key={v.key}
+                              label={v.label}
+                              price={variantPrice(settings, serviceType, v)}
+                              promo={v.promo}
+                              count={currentVariantQty[v.key] ?? 0}
+                              onChange={(n) => setVariantCount(v.key, n)}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                    <p className="text-sm font-600 text-muted-foreground">
+                      {bagVariantMode
+                        ? `Total: ${equivalentBags} ${equivalentBags === 1 ? 'bolsa' : 'bolsas'}`
+                        : `Total: ${linesQty} ${linesQty === 1 ? unitLabels.singular : unitLabels.plural}`}
+                    </p>
+                  </>
+                ) : (
+                  <>
+                <Label>Cantidad de {unitLabels.plural}</Label>
+                    <div className="flex flex-wrap gap-2">
+                      {isBagUnit &&
+                        FRACTION_OPTIONS.map((f) => (
+                          <AmountChip
+                            key={f}
+                            big={FRACTION_SYMBOLS[f]}
+                            caption={unitLabels.singular}
+                            amountLabel={showBagFramePrices ? bagOptionPrice(settings.bagFactors[f] ?? 1) : undefined}
+                            selected={!manualAmount && bagSize === f}
+                            onClick={() => pickFraction(f)}
+                          />
+                        ))}
+                      {COUNT_OPTIONS.map((n) => (
+                        <AmountChip
+                          key={n}
+                          big={String(n)}
+                          caption={n === 1 ? unitLabels.singular : unitLabels.plural}
+                          amountLabel={showBagFramePrices ? bagOptionPrice(n) : undefined}
+                          selected={
+                            !manualAmount && bagSize === 'full' && Number(quantity) === n
+                          }
+                          onClick={() => pickCount(n)}
+                        />
+                      ))}
+                      <AmountChip
+                        big="Otra"
+                        caption="cantidad"
+                        selected={manualAmount}
+                        onClick={pickManual}
+                      />
+                    </div>
+                    {manualAmount && (
+                      <div className="flex max-w-xs flex-col gap-1.5">
+                        <Label htmlFor="qty">Escribe la cantidad</Label>
+                        <Input
+                          id="qty"
+                          inputMode="numeric"
+                          autoComplete="off"
+                          autoFocus
+                          value={quantity}
+                          onChange={(e) =>
+                            updateServiceAmount(serviceType, (current) => ({
+                              ...current,
+                              quantity: e.target.value.replace(/\D/g, ''),
+                              touched: true,
+                            }))
+                          }
+                          placeholder={`Ej. 12 ${unitLabels.plural}`}
+                        />
+                      </div>
+                    )}
+                    {serviceType === 'otro' && (
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        <div className="flex flex-col gap-1.5">
+                          <Label htmlFor="other-description">Descripción de mercancía</Label>
+                          <Input
+                            id="other-description"
+                            autoComplete="off"
+                            value={otherDescription}
+                            onChange={(e) => setOtherDescription(e.target.value)}
+                            placeholder="Ej. Herramientas, uniforme, etc."
+                          />
+                        </div>
+                        <div className="flex flex-col gap-1.5">
+                          <Label htmlFor="other-price">Precio por pieza</Label>
+                          <Input
+                            id="other-price"
+                            inputMode="decimal"
+                            autoComplete="off"
+                            value={otherUnitPrice}
+                            onChange={(e) => setOtherUnitPrice(e.target.value)}
+                            placeholder="0.00"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+                {ironingRestricted && (
+                  <div className="flex max-w-xs flex-col gap-1.5">
+                    <Label htmlFor="pieces">Piezas estimadas (obligatorio)</Label>
+                    <Input
+                      id="pieces"
+                      inputMode="numeric"
+                      autoComplete="off"
+                      value={pieceCount}
+                      onChange={(e) => setPieceCount(e.target.value)}
+                      placeholder="Ej. 4 (imprime 4 tickets)"
+                      required={ironingRestricted}
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div className="flex flex-col gap-2">
                 <Label>Modalidad</Label>
                 <div className="grid grid-cols-2 gap-2">
                   {(['regular', 'express'] as ServiceMode[]).map((m) => (
                     <button
                       key={m}
                       type="button"
-                      onClick={() => setMode(m)}
+                      onClick={() => selectMode(m)}
                       className={cn(
-                        'flex h-11 items-center justify-center gap-1.5 rounded-lg border text-sm font-700 transition-colors',
+                        'flex h-16 items-center justify-center gap-1.5 rounded-xl border-2 text-sm font-700 transition-colors',
                         mode === m
                           ? m === 'express'
                             ? 'border-brand-yellow bg-brand-yellow text-warning-foreground'
@@ -531,80 +1014,42 @@ export function NewOrderForm({
               </div>
             </div>
 
-            <div className="flex flex-col gap-1.5">
-              <Label>Tamaño de bolsa / carga</Label>
-              <div className="flex flex-wrap gap-2">
-                {BAG_OPTIONS.map((b) => (
-                  <button
-                    key={b}
-                    type="button"
-                    onClick={() => setBagSize(b)}
-                    className={cn(
-                      'rounded-lg border px-3 py-2 text-sm font-600 transition-colors',
-                      bagSize === b
-                        ? 'border-primary bg-accent text-accent-foreground'
-                        : 'border-input bg-background text-foreground',
-                    )}
-                  >
-                    {BAG_LABELS[b]}
-                  </button>
-                ))}
+            <div className="flex flex-col gap-3 rounded-lg border border-border bg-muted/30 p-3">
+              <div className="flex flex-wrap items-center gap-3">
+                <CalendarDays className="size-5 text-primary" />
+                <div className="flex flex-col leading-tight">
+                  <span className="text-xs text-muted-foreground">Entrega programada</span>
+                  <span className="text-sm font-700">{formatDate(promisedDate)}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEditingDate((v) => !v)}
+                  className="ml-auto text-sm font-700 text-primary hover:underline"
+                >
+                  {editingDate ? 'Listo' : 'Cambiar fecha'}
+                </button>
               </div>
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-3">
-              {bagSize === 'custom' && (
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="factor">Factor personalizado</Label>
+              {editingDate && (
+                <div className="flex max-w-xs flex-col gap-1.5">
+                  <Label htmlFor="delivery-date">Fecha de entrega</Label>
                   <Input
-                    id="factor"
-                    inputMode="decimal"
-                    value={customFactor}
-                    onChange={(e) => setCustomFactor(e.target.value)}
+                    id="delivery-date"
+                    type="date"
+                    value={deliveryDate}
+                    min={toDateInput(new Date())}
+                    onChange={(e) => {
+                      setDeliveryDate(e.target.value)
+                      setDateTouched(true)
+                    }}
+                    required
                   />
+                  <span className="text-xs text-muted-foreground">
+                    Hora fija de entrega: 3:00 PM
+                  </span>
                 </div>
               )}
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="qty">Cantidad (cargas)</Label>
-                <Input
-                  id="qty"
-                  inputMode="numeric"
-                  value={quantity}
-                  onChange={(e) => setQuantity(e.target.value)}
-                />
-              </div>
               {ironingRestricted && (
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="pieces">Piezas estimadas (obligatorio)</Label>
-                  <Input
-                    id="pieces"
-                    inputMode="numeric"
-                    value={pieceCount}
-                    onChange={(e) => setPieceCount(e.target.value)}
-                    placeholder="Ej. 4 (imprime 4 tickets)"
-                    required={ironingRestricted}
-                  />
-                </div>
-              )}
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="delivery-date">Fecha de entrega (obligatoria)</Label>
-                <Input
-                  id="delivery-date"
-                  type="date"
-                  value={deliveryDate}
-                  min={toDateInput(new Date())}
-                  onChange={(e) => setDeliveryDate(e.target.value)}
-                  required
-                />
-                <span className="text-xs text-muted-foreground">
-                  Hora fija de entrega: 3:00 PM
-                </span>
-              </div>
-              {ironingRestricted && (
-                <div className="flex flex-col justify-end gap-1.5 rounded-lg border border-border bg-muted/30 p-3 text-sm">
+                <div className="flex flex-col gap-1 border-t border-border pt-3 text-sm">
                   <span className="font-600">Capacidad de piezas para ese día</span>
                   <span className="text-muted-foreground">
                     Programadas: {scheduledIroning} pieza(s) / Máximo: {ironingCapacity == null ? 'Sin límite' : `${ironingCapacity} pieza(s)`}
@@ -625,84 +1070,14 @@ export function NewOrderForm({
           </CardContent>
         </Card>
 
-        {/* Special items */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Piezas especiales</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3">
-            <div className="flex flex-wrap gap-2">
-              {SPECIAL_ITEMS_CATALOG.map((item) => (
-                <button
-                  key={item.name}
-                  type="button"
-                  onClick={() => addSpecialItem(item.name, item.price)}
-                  className="flex items-center gap-1.5 rounded-full border border-input bg-background px-3 py-1.5 text-sm font-600 transition-colors hover:border-primary hover:bg-accent"
-                >
-                  <Plus className="size-3.5" /> {item.name}
-                  <span className="text-muted-foreground">
-                    {formatCurrency(item.price)}
-                  </span>
-                </button>
-              ))}
-            </div>
-            {specialItems.length > 0 && (
-              <div className="flex flex-col divide-y divide-border rounded-lg border border-border">
-                {specialItems.map((item) => (
-                  <div
-                    key={item.name}
-                    className="flex items-center justify-between gap-2 p-2.5"
-                  >
-                    <span className="text-sm font-600">{item.name}</span>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-muted-foreground">
-                        {formatCurrency(item.unit_price)}
-                      </span>
-                      <div className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={() => updateItemQty(item.name, -1)}
-                          className="flex size-7 items-center justify-center rounded-md border border-input text-lg leading-none"
-                        >
-                          −
-                        </button>
-                        <span className="w-6 text-center text-sm font-700">
-                          {item.quantity}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => updateItemQty(item.name, 1)}
-                          className="flex size-7 items-center justify-center rounded-md border border-input text-lg leading-none"
-                        >
-                          +
-                        </button>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setSpecialItems((prev) =>
-                            prev.filter((i) => i.name !== item.name),
-                          )
-                        }
-                        className="text-muted-foreground hover:text-destructive"
-                        aria-label={`Quitar ${item.name}`}
-                      >
-                        <Trash2 className="size-4" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Instructions & notes */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Instrucciones del cliente</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3">
+        <div className="grid items-start gap-4">
+          {/* Instructions & notes */}
+          <CollapsibleCard
+            title="Instrucciones del cliente"
+            open={showInstructions}
+            onToggle={() => setShowInstructions((v) => !v)}
+            count={instructionsCount}
+          >
             <div className="flex flex-wrap gap-2">
               {INSTRUCTION_PRESETS.map((preset) => (
                 <button
@@ -730,8 +1105,8 @@ export function NewOrderForm({
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Notas internas (no visibles para el cliente)"
             />
-          </CardContent>
-        </Card>
+          </CollapsibleCard>
+        </div>
       </div>
 
       {/* Summary sidebar */}
@@ -755,9 +1130,40 @@ export function NewOrderForm({
                   )
                 }
               />
-              <Row label="Bolsa" value={BAG_LABELS[bagSize]} />
+              <Row
+                label="Cantidad"
+                value={
+                  hasMixedServices
+                    ? `${amountQty} piezas`
+                    : bagVariantMode
+                    ? `${equivalentBags} ${equivalentBags === 1 ? 'bolsa' : 'bolsas'}`
+                    : variants
+                      ? `${amountQty} ${amountQty === 1 ? unitLabels.singular : unitLabels.plural}`
+                      : formatAmount(serviceType, storedBagSize, amountQty || 1)
+                }
+              />
               <Row label="Entrega estimada" value={formatDate(promisedDate)} />
             </div>
+
+            {quickBreakdown.length > 0 && (
+              <div className="flex max-h-64 flex-col gap-1 overflow-y-auto rounded-lg border border-border bg-muted/20 p-2">
+                <span className="px-1 text-xs font-700 text-muted-foreground">
+                  Desglose rápido
+                </span>
+                {quickBreakdown.map((line, idx) => (
+                  <div
+                    key={`${line.label}-${idx}`}
+                    className="grid grid-cols-[1fr_auto] items-start gap-2 rounded-md px-1 py-1 text-xs"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate font-600">{line.label}</p>
+                      <p className="text-muted-foreground">{line.quantity} pza(s)</p>
+                    </div>
+                    <span className="font-700">{formatCurrency(line.amount)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
 
             <div className="flex flex-col gap-2 border-t border-border pt-3 text-sm">
               <Row label="Subtotal" value={formatCurrency(price.subtotal)} />
@@ -826,6 +1232,7 @@ export function NewOrderForm({
               disabled={
                 submitting ||
                 !deliveryDate ||
+                !(amountQty > 0) ||
                 !hasCapacityForIroning ||
                 (ironingRestricted && !pieceCountValid)
               }
@@ -854,6 +1261,150 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
     <div className="flex items-center justify-between gap-2">
       <span className="text-muted-foreground">{label}</span>
       <span className="font-600">{value}</span>
+    </div>
+  )
+}
+
+function AmountChip({
+  big,
+  caption,
+  amountLabel,
+  selected,
+  onClick,
+}: {
+  big: string
+  caption: string
+  amountLabel?: string
+  selected: boolean
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={selected}
+      className={cn(
+        'flex h-16 min-w-16 flex-col items-center justify-center rounded-xl border-2 px-3 transition-colors',
+        selected
+          ? 'border-primary bg-primary text-primary-foreground shadow-sm'
+          : 'border-input bg-background text-foreground hover:border-primary/50 hover:bg-accent',
+      )}
+    >
+      <span className="font-display text-xl font-800 leading-none">{big}</span>
+      <span className="mt-1 text-xs font-600 opacity-80">{caption}</span>
+      {amountLabel && <span className="text-[11px] font-700 opacity-90">{amountLabel}</span>}
+    </button>
+  )
+}
+
+function CollapsibleCard({
+  title,
+  open,
+  onToggle,
+  count,
+  children,
+}: {
+  title: string
+  open: boolean
+  onToggle: () => void
+  count: number
+  children: React.ReactNode
+}) {
+  return (
+    <Card>
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between gap-2 p-4 text-left"
+      >
+        <span className="flex items-center gap-2 font-display text-lg font-800 leading-tight">
+          {title}
+          {count > 0 && <Badge variant="sky">{count}</Badge>}
+        </span>
+        <ChevronDown
+          className={cn(
+            'size-5 text-muted-foreground transition-transform',
+            open && 'rotate-180',
+          )}
+        />
+      </button>
+      {open && <CardContent className="flex flex-col gap-3">{children}</CardContent>}
+    </Card>
+  )
+}
+
+function groupVariants(variants: ServiceVariant[]) {
+  const groups: { group?: string; items: ServiceVariant[] }[] = []
+  for (const v of variants) {
+    const last = groups[groups.length - 1]
+    if (last && last.group === v.group) last.items.push(v)
+    else groups.push({ group: v.group, items: [v] })
+  }
+  return groups
+}
+
+function VariantTile({
+  label,
+  price,
+  promo,
+  count,
+  onChange,
+}: {
+  label: string
+  price: number
+  promo?: boolean
+  count: number
+  onChange: (n: number) => void
+}) {
+  const active = count > 0
+  return (
+    <div
+      className={cn(
+        'flex flex-col overflow-hidden rounded-xl border-2 transition-colors',
+        active ? 'border-primary bg-primary/10' : 'border-input bg-background',
+      )}
+    >
+      <button
+        type="button"
+        onClick={() => onChange(count + 1)}
+        className="flex flex-1 flex-col items-center gap-1 px-3 pb-2 pt-3 text-center hover:bg-accent/60"
+      >
+        {promo && <Badge variant="warning">Promo</Badge>}
+        <span className="text-base font-800 leading-tight">{label}</span>
+        <span className="text-sm font-600 text-muted-foreground">
+          {formatCurrency(price)}
+        </span>
+      </button>
+      <div className="flex items-center justify-between gap-1 border-t border-border/60 p-2">
+        <button
+          type="button"
+          onClick={() => onChange(count - 1)}
+          disabled={!active}
+          aria-label={`Quitar uno: ${label}`}
+          className="flex size-12 items-center justify-center rounded-lg border-2 border-input bg-background text-2xl font-800 leading-none disabled:opacity-30"
+        >
+          −
+        </button>
+        <input
+          inputMode="numeric"
+          autoComplete="off"
+          aria-label={`Cantidad: ${label}`}
+          value={count === 0 ? '' : String(count)}
+          placeholder="0"
+          onChange={(e) => onChange(Number(e.target.value.replace(/\D/g, '')) || 0)}
+          onFocus={(e) => e.target.select()}
+          className="h-12 w-full min-w-0 rounded-lg border-2 border-transparent bg-transparent text-center font-display text-2xl font-900 focus-visible:border-ring focus-visible:outline-none"
+        />
+        <button
+          type="button"
+          onClick={() => onChange(count + 1)}
+          aria-label={`Agregar uno: ${label}`}
+          className="flex size-12 items-center justify-center rounded-lg border-2 border-primary bg-primary text-2xl font-800 leading-none text-primary-foreground"
+        >
+          +
+        </button>
+      </div>
     </div>
   )
 }

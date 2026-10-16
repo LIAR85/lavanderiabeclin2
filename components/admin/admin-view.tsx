@@ -20,6 +20,7 @@ import { AdminDeliveryCalendar } from './admin-delivery-calendar'
 import { AdminExpenses } from './admin-expenses'
 import { AdminHistory } from './admin-history'
 import { AdminInventory } from './admin-inventory'
+import { AdminClients } from './admin-clients'
 import { AdminMetrics } from './admin-metrics'
 import { AdminPeople } from './admin-people'
 import { AdminSettings } from './admin-settings'
@@ -28,6 +29,7 @@ type Tab =
   | 'metrics'
   | 'inventory'
   | 'expenses'
+  | 'clients'
   | 'people'
   | 'calendar'
   | 'history'
@@ -37,10 +39,11 @@ const TABS: { key: Tab; label: string; icon: typeof TrendingUp }[] = [
   { key: 'metrics', label: 'Métricas', icon: TrendingUp },
   { key: 'inventory', label: 'Inventario', icon: Boxes },
   { key: 'expenses', label: 'Gastos', icon: Receipt },
+  { key: 'clients', label: 'Clientes', icon: Users },
   { key: 'people', label: 'Personal', icon: Users },
   { key: 'calendar', label: 'Calendario', icon: CalendarDays },
   { key: 'history', label: 'Historial', icon: Receipt },
-  { key: 'settings', label: 'Ajustes', icon: Settings2 },
+  { key: 'settings', label: 'Precios', icon: Settings2 },
 ]
 
 export function AdminView() {
@@ -67,6 +70,8 @@ export function AdminView() {
         return <AdminInventory />
       case 'expenses':
         return <AdminExpenses />
+      case 'clients':
+        return <AdminClients />
       case 'people':
         return <AdminPeople />
       case 'calendar':
@@ -122,7 +127,7 @@ export function AdminView() {
   }
 
   return (
-    <div className="mx-auto flex max-w-5xl flex-col gap-4">
+    <div className="mx-auto flex w-full max-w-none flex-col gap-4">
       <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
         {TABS.map((t) => {
           const Icon = t.icon

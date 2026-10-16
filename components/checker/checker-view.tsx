@@ -53,15 +53,15 @@ export function CheckerView() {
   }
 
   return (
-    <div className="mx-auto max-w-xl">
-      <Card className="border-sky-200 bg-gradient-to-b from-sky-50 to-white">
-        <CardContent className="flex flex-col gap-4 p-5">
+    <div className="mx-auto w-full max-w-2xl">
+      <Card className="border-sky-200 bg-gradient-to-b from-sky-50 to-white shadow-sm">
+        <CardContent className="flex flex-col gap-5 p-5 md:p-6">
           <div className="flex items-center gap-2">
-            <div className="rounded-full bg-sky-100 p-2 text-sky-700">
-              <Clock3 className="size-4" />
+            <div className="rounded-full bg-sky-100 p-2.5 text-sky-700">
+              <Clock3 className="size-5" />
             </div>
             <div>
-              <h2 className="font-display text-lg font-800 text-sky-900">Checador</h2>
+              <h2 className="font-display text-xl font-900 text-sky-900">Checador de personal</h2>
               <p className="text-sm text-slate-600">
                 Captura tu número de empleado para registrar entrada o salida.
               </p>
@@ -75,14 +75,15 @@ export function CheckerView() {
               placeholder="Ej. E001"
               value={employeeNumber}
               onChange={(e) => setEmployeeNumber(e.target.value)}
+              className="h-12 text-xl font-800 tracking-wide"
             />
           </div>
 
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <Button onClick={() => register('in')} className="font-700">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <Button onClick={() => register('in')} className="h-12 text-base font-800">
               Registrar entrada
             </Button>
-            <Button variant="outline" onClick={() => register('out')} className="font-700">
+            <Button variant="outline" onClick={() => register('out')} className="h-12 text-base font-800">
               Registrar salida
             </Button>
           </div>

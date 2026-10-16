@@ -23,6 +23,8 @@ export function computePrice(params: {
   bagSize: BagSize
   quantity: number
   customBagFactor?: number
+  /** When defined, the subtotal comes from these lines instead of base price. */
+  serviceLines?: { unit_price: number; quantity: number }[]
   specialItems: SpecialItemInput[]
 }): PriceBreakdown {
   const {
@@ -32,6 +34,7 @@ export function computePrice(params: {
     bagSize,
     quantity,
     customBagFactor,
+    serviceLines,
     specialItems,
   } = params
 
@@ -40,7 +43,10 @@ export function computePrice(params: {
   const qty = quantity > 0 ? quantity : 1
   const modeMultiplier = serviceMode === 'express' ? settings.expressMultiplier : 1
 
-  const subtotal = round2(base * factor * qty * modeMultiplier)
+  const baseSubtotal = serviceLines
+    ? serviceLines.reduce((sum, l) => sum + l.unit_price * l.quantity, 0)
+    : base * factor * qty
+  const subtotal = round2(baseSubtotal * modeMultiplier)
   const extrasTotal = round2(
     specialItems.reduce((sum, item) => sum + item.unit_price * item.quantity, 0),
   )

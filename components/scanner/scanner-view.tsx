@@ -2,13 +2,14 @@
 
 import { BrowserMultiFormatReader } from '@zxing/browser'
 import { Camera, CheckCircle2, Loader2, ScanLine, XCircle } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { formatCurrency } from '@/lib/format'
-import { useDeliverByFolio } from '@/lib/hooks'
+import { formatCurrency, formatDate, formatRelative } from '@/lib/format'
+import { useDeliverByFolio, useOrders } from '@/lib/hooks'
 import type { OrderWithClient } from '@/lib/types'
 
 export function ScannerView() {
@@ -19,8 +20,28 @@ export function ScannerView() {
   const [result, setResult] = useState<
     { ok: true; order: OrderWithClient } | { ok: false; folio: string } | null
   >(null)
+  const [deliveredQuery, setDeliveredQuery] = useState('')
   const deliver = useDeliverByFolio()
+  const { data: orders } = useOrders()
   const processingRef = useRef(false)
+
+  const deliveredOrders = useMemo(() => {
+    const q = deliveredQuery.trim().toLowerCase()
+    const list = (orders ?? [])
+      .filter((o) => o.status === 'delivered')
+      .sort(
+        (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime(),
+      )
+    if (!q) return list.slice(0, 25)
+    return list
+      .filter(
+        (o) =>
+          o.order_number.toLowerCase().includes(q) ||
+          o.client.name.toLowerCase().includes(q) ||
+          o.client.phone.includes(q),
+      )
+      .slice(0, 25)
+  }, [orders, deliveredQuery])
 
   useEffect(() => {
     return () => controlsRef.current?.stop()
@@ -81,10 +102,10 @@ export function ScannerView() {
   }
 
   return (
-    <div className="mx-auto flex max-w-md flex-col gap-4">
+    <div className="grid w-full gap-4 lg:grid-cols-2 lg:items-start">
       <Card>
         <CardContent className="flex flex-col gap-4 p-4">
-          <div className="relative aspect-square overflow-hidden rounded-xl bg-foreground/90">
+          <div className="relative aspect-square overflow-hidden rounded-xl bg-foreground/90 lg:aspect-video">
             {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
             <video
               ref={videoRef}
@@ -134,36 +155,88 @@ export function ScannerView() {
         </CardContent>
       </Card>
 
-      {result?.ok && (
-        <Card className="border-success/40 bg-success/5">
-          <CardContent className="flex flex-col items-center gap-2 p-6 text-center">
-            <CheckCircle2 className="size-12 text-success" />
-            <p className="font-display text-xl font-900">{result.order.order_number}</p>
-            <p className="font-600">{result.order.client.name}</p>
-            <p className="text-sm text-muted-foreground">
-              Entregada correctamente
-            </p>
-            <p className="mt-1 font-display text-lg font-800 text-primary">
-              {formatCurrency(result.order.charged_total ?? result.order.total)}
-            </p>
-            {result.order.payment_status !== 'paid' && (
-              <p className="text-sm font-700 text-warning-foreground">
-                Recuerda cobrar {formatCurrency(result.order.total)}
+      <div className="flex flex-col gap-4">
+        {!result && (
+          <Card className="border-dashed">
+            <CardContent className="flex flex-col items-center gap-2 p-10 text-center text-muted-foreground">
+              <ScanLine className="size-10 opacity-60" />
+              <p className="text-sm font-600">
+                Aquí aparecerá el resultado de la entrega
               </p>
+            </CardContent>
+          </Card>
+        )}
+      {result?.ok && (
+          <Card className="border-success/40 bg-success/5">
+            <CardContent className="flex flex-col items-center gap-2 p-6 text-center">
+              <CheckCircle2 className="size-12 text-success" />
+              <p className="font-display text-xl font-900">{result.order.order_number}</p>
+              <p className="font-600">{result.order.client.name}</p>
+              <p className="text-sm text-muted-foreground">
+                Entregada correctamente
+              </p>
+              <p className="mt-1 font-display text-lg font-800 text-primary">
+                {formatCurrency(result.order.charged_total ?? result.order.total)}
+              </p>
+              {result.order.payment_status !== 'paid' && (
+                <p className="text-sm font-700 text-warning-foreground">
+                  Recuerda cobrar {formatCurrency(result.order.total)}
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        )}
+  
+        {result && !result.ok && (
+          <Card className="border-destructive/40 bg-destructive/5">
+            <CardContent className="flex flex-col items-center gap-2 p-6 text-center">
+              <XCircle className="size-12 text-destructive" />
+              <p className="font-display text-lg font-800">Folio no encontrado</p>
+              <p className="text-sm text-muted-foreground">{result.folio}</p>
+            </CardContent>
+          </Card>
+        )}
+
+        <Card>
+          <CardContent className="flex flex-col gap-3 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="font-display text-base font-800">Órdenes terminadas</span>
+              <Badge variant="outline">{deliveredOrders.length} mostradas</Badge>
+            </div>
+            <Input
+              value={deliveredQuery}
+              onChange={(e) => setDeliveredQuery(e.target.value)}
+              placeholder="Buscar por folio, nombre o teléfono"
+            />
+            {deliveredOrders.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No hay órdenes terminadas para mostrar.
+              </p>
+            ) : (
+              <div className="max-h-[48vh] overflow-y-auto rounded-lg border border-border">
+                {deliveredOrders.map((o) => (
+                  <div
+                    key={o.id}
+                    className="grid grid-cols-[1fr_auto] items-start gap-2 border-b border-border p-3 last:border-b-0"
+                  >
+                    <div className="flex min-w-0 flex-col">
+                      <span className="font-700 leading-tight">{o.order_number}</span>
+                      <span className="truncate text-sm">{o.client.name}</span>
+                      <span className="text-xs text-muted-foreground">{o.client.phone}</span>
+                      <span className="mt-1 text-xs text-muted-foreground">
+                        Entregada {formatRelative(o.updated_at)} · {formatDate(o.updated_at)}
+                      </span>
+                    </div>
+                    <span className="font-display font-800 text-primary">
+                      {formatCurrency(o.charged_total ?? o.total)}
+                    </span>
+                  </div>
+                ))}
+              </div>
             )}
           </CardContent>
         </Card>
-      )}
-
-      {result && !result.ok && (
-        <Card className="border-destructive/40 bg-destructive/5">
-          <CardContent className="flex flex-col items-center gap-2 p-6 text-center">
-            <XCircle className="size-12 text-destructive" />
-            <p className="font-display text-lg font-800">Folio no encontrado</p>
-            <p className="text-sm text-muted-foreground">{result.folio}</p>
-          </CardContent>
-        </Card>
-      )}
+      </div>
     </div>
   )
 }

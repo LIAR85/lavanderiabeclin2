@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import {
-  BAG_LABELS,
+  formatAmount,
   getNextStatus,
   MODE_LABELS,
   SERVICE_LABELS,
@@ -42,10 +42,12 @@ export function OrderDetailDialog({
   const [charged, setCharged] = useState('')
   const [overrideNote, setOverrideNote] = useState('')
   const [sendingReadyEmail, setSendingReadyEmail] = useState(false)
+  const [confirmingCollect, setConfirmingCollect] = useState(false)
 
   useEffect(() => {
     if (order) setCharged(String(order.total))
     setOverrideNote('')
+    setConfirmingCollect(false)
   }, [order])
 
   if (!order) return null
@@ -108,6 +110,7 @@ export function OrderDetailDialog({
       }
 
       toast.success('Orden cobrada y entregada')
+      setConfirmingCollect(false)
     } catch {
       toast.error('No se pudo completar la entrega')
     }
@@ -165,10 +168,9 @@ export function OrderDetailDialog({
         <div className="grid grid-cols-2 gap-3 rounded-lg border border-border p-3 text-sm">
           <Field label="Servicio" value={SERVICE_LABELS[order.service_type]} />
           <Field
-            label="Bolsa"
-            value={order.bag_size ? BAG_LABELS[order.bag_size] : '—'}
+            label="Cantidad"
+            value={formatAmount(order.service_type, order.bag_size, order.quantity)}
           />
-          <Field label="Cantidad" value={`${order.quantity} carga(s)`} />
           <Field
             label="Piezas est."
             value={order.estimated_piece_count?.toString() ?? '—'}
@@ -184,23 +186,34 @@ export function OrderDetailDialog({
           </div>
         )}
 
-        {items && items.length > 0 && (
-          <div className="flex flex-col gap-1.5">
-            <span className="text-sm font-700">Piezas especiales</span>
-            <div className="flex flex-col divide-y divide-border rounded-lg border border-border text-sm">
-              {items.map((it) => (
-                <div key={it.id} className="flex justify-between p-2.5">
-                  <span>
-                    {it.quantity}× {it.name}
-                  </span>
-                  <span className="font-600">
-                    {formatCurrency(it.unit_price * it.quantity)}
-                  </span>
-                </div>
-              ))}
+        {[
+          {
+            title: 'Detalle del servicio',
+            lines: (items ?? []).filter((it) => it.kind === 'service' || it.kind === 'addon'),
+          },
+          {
+            title: 'Piezas especiales',
+            lines: (items ?? []).filter((it) => !it.kind || it.kind === 'extra'),
+          },
+        ]
+          .filter((g) => g.lines.length > 0)
+          .map((g) => (
+            <div key={g.title} className="flex flex-col gap-1.5">
+              <span className="text-sm font-700">{g.title}</span>
+              <div className="flex flex-col divide-y divide-border rounded-lg border border-border text-sm">
+                {g.lines.map((it) => (
+                  <div key={it.id} className="flex justify-between p-2.5">
+                    <span>
+                      {it.quantity}× {it.name}
+                    </span>
+                    <span className="font-600">
+                      {formatCurrency(it.unit_price * it.quantity)}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
-        )}
+          ))}
 
         <div className="flex flex-col gap-2 rounded-lg border border-border p-3 text-sm">
           <div className="flex justify-between">
@@ -296,20 +309,44 @@ export function OrderDetailDialog({
                     />
                   </div>
                 )}
-                <Button
-                  onClick={handleCollect}
-                  disabled={collect.isPending}
-                  className="h-12 text-base font-800"
-                >
-                  {collect.isPending ? (
-                    <Loader2 className="size-5 animate-spin" />
-                  ) : (
+                {!confirmingCollect ? (
+                  <Button
+                    onClick={() => setConfirmingCollect(true)}
+                    disabled={collect.isPending}
+                    className="h-12 text-base font-800"
+                  >
                     <>
                       <Check className="size-5" /> Cobrar {formatCurrency(chargedNum)} y
                       entregar
                     </>
-                  )}
-                </Button>
+                  </Button>
+                ) : (
+                  <div className="rounded-lg border border-warning-foreground/40 bg-warning/10 p-3">
+                    <p className="text-sm font-700">
+                      ¿Confirmas que deseas terminar esta orden?
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Se marcará como entregada y cobrada por{' '}
+                      {formatCurrency(chargedNum)}.
+                    </p>
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      <Button
+                        variant="outline"
+                        onClick={() => setConfirmingCollect(false)}
+                        disabled={collect.isPending}
+                      >
+                        Cancelar
+                      </Button>
+                      <Button onClick={handleCollect} disabled={collect.isPending}>
+                        {collect.isPending ? (
+                          <Loader2 className="size-4 animate-spin" />
+                        ) : (
+                          'Sí, terminar orden'
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </>
             ) : (
               next && (

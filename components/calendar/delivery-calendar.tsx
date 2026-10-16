@@ -104,7 +104,7 @@ export function DeliveryCalendar({
 
   const [bulkEnabled, setBulkEnabled] = useState(true)
   const [bulkStartDate, setBulkStartDate] = useState(() => getDateKeyFromDate(today))
-  const [bulkMonths, setBulkMonths] = useState('2')
+  const [bulkEndDate, setBulkEndDate] = useState(() => getDateKeyFromDate(today))
   const [bulkPlanchadoLimit, setBulkPlanchadoLimit] = useState('40')
   const [bulkLavadoPlanchadoLimit, setBulkLavadoPlanchadoLimit] = useState('40')
   const [bulkPlanchadoUnlimited, setBulkPlanchadoUnlimited] = useState(false)
@@ -253,13 +253,10 @@ export function DeliveryCalendar({
 
   function saveBulkCapacity() {
     if (!bulkEnabled) return
-    const months = Number.parseInt(bulkMonths, 10)
-    if (!Number.isInteger(months) || months <= 0) return
-
     const start = new Date(`${bulkStartDate}T00:00:00`)
-    if (Number.isNaN(start.getTime())) return
-    const end = new Date(start)
-    end.setMonth(end.getMonth() + months)
+    const end = new Date(`${bulkEndDate}T00:00:00`)
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return
+    if (end < start) return
 
     const nextByDate = { ...config.byDate }
     const fallback = config.defaultConfig
@@ -270,7 +267,7 @@ export function DeliveryCalendar({
     )
 
     const cursor = new Date(start)
-    while (cursor < end) {
+    while (cursor <= end) {
       const key = getDateKeyFromDate(cursor)
       const current = getDayConfig(config, key)
       nextByDate[key] = {
@@ -434,7 +431,7 @@ export function DeliveryCalendar({
               </div>
             </div>
 
-            <div className="grid gap-3 rounded-lg border border-sky-200 bg-sky-50/60 p-3 sm:grid-cols-3">
+            <div className="grid gap-3 rounded-lg border border-border bg-muted/30 p-3 sm:grid-cols-3">
               <div className="sm:col-span-3">
                 <label className="flex items-center gap-2 text-sm font-600">
                   <input
@@ -442,7 +439,7 @@ export function DeliveryCalendar({
                     checked={bulkEnabled}
                     onChange={(e) => setBulkEnabled(e.target.checked)}
                   />
-                  ¿Deseas conservar el mismo tope por un periodo?
+                  Aplicar topes por rango de fechas
                 </label>
               </div>
 
@@ -457,12 +454,12 @@ export function DeliveryCalendar({
                 />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="bulk-months">Duración (meses)</Label>
+                <Label htmlFor="bulk-end">Hasta</Label>
                 <Input
-                  id="bulk-months"
-                  inputMode="numeric"
-                  value={bulkMonths}
-                  onChange={(e) => setBulkMonths(e.target.value)}
+                  id="bulk-end"
+                  type="date"
+                  value={bulkEndDate}
+                  onChange={(e) => setBulkEndDate(e.target.value)}
                   disabled={!bulkEnabled}
                 />
               </div>
@@ -472,7 +469,7 @@ export function DeliveryCalendar({
                   onClick={saveBulkCapacity}
                   disabled={!bulkEnabled}
                 >
-                  Aplicar en bloque
+                  Aplicar rango
                 </Button>
               </div>
 
@@ -521,9 +518,9 @@ export function DeliveryCalendar({
         </Card>
       )}
 
-      <Card className="border-sky-200 bg-gradient-to-b from-sky-50/70 via-cyan-50/40 to-white">
+      <Card className="border-border bg-gradient-to-b from-background via-muted/20 to-background">
         <CardHeader>
-          <CardTitle className="text-sky-900">Calendario mensual de entregas</CardTitle>
+          <CardTitle className="text-foreground">Calendario mensual de entregas</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -565,9 +562,9 @@ export function DeliveryCalendar({
           </div>
 
           <div className="grid grid-cols-1 gap-2 text-xs sm:grid-cols-2">
-            <div className="rounded-md border border-sky-200 bg-sky-100/60 px-2 py-1.5">
-              <p className="text-sky-700">Total de órdenes del mes</p>
-              <p className="text-lg font-800 text-sky-950">{monthSummary.total}</p>
+            <div className="rounded-md border border-border bg-muted/40 px-2 py-1.5">
+              <p className="text-muted-foreground">Total de órdenes del mes</p>
+              <p className="text-lg font-800 text-foreground">{monthSummary.total}</p>
             </div>
           </div>
 
@@ -603,8 +600,8 @@ export function DeliveryCalendar({
                   key={cell.dateKey}
                   className={
                     cell.inMonth
-                      ? 'min-h-20 rounded-lg border border-sky-200 bg-gradient-to-b from-white to-sky-50/60 p-1.5 text-xs shadow-[0_1px_0_rgba(14,116,144,0.08)]'
-                      : 'min-h-20 rounded-lg border border-slate-200 bg-slate-50/80 p-1.5 text-xs text-muted-foreground'
+                      ? 'min-h-20 rounded-lg border border-border bg-background p-1.5 text-xs shadow-sm'
+                      : 'min-h-20 rounded-lg border border-border/60 bg-muted/30 p-1.5 text-xs text-muted-foreground'
                   }
                 >
                   <div className="mb-1 flex items-center justify-between">
@@ -618,25 +615,25 @@ export function DeliveryCalendar({
                       {cell.dayNumber}
                     </span>
                     {cell.inMonth && overLimit && (
-                      <span className="rounded bg-rose-100 px-1 py-0.5 text-[9px] font-700 text-rose-700">Límite</span>
+                      <span className="rounded bg-amber-100 px-1 py-0.5 text-[9px] font-700 text-amber-800">Límite</span>
                     )}
                   </div>
                   <div className="space-y-0.5 text-[10px] leading-tight">
                     <div className="flex items-center justify-between">
-                      <span className="text-sky-700">Total</span>
-                      <span className="font-700 text-sky-950">{total}</span>
+                      <span className="text-muted-foreground">Total</span>
+                      <span className="font-700 text-foreground">{total}</span>
                     </div>
                     {editable && (
                       <>
                         <div className="flex items-center justify-between">
-                          <span className="text-indigo-700">LyP piezas</span>
-                          <span className="font-700 text-indigo-900">
+                          <span className="text-muted-foreground">LyP piezas</span>
+                          <span className="font-700 text-foreground">
                             {lpUsed}/{lpLimit == null ? '∞' : lpLimit}
                           </span>
                         </div>
                         <div className="flex items-center justify-between">
-                          <span className="text-blue-700">P piezas</span>
-                          <span className="font-700 text-blue-900">
+                          <span className="text-muted-foreground">P piezas</span>
+                          <span className="font-700 text-foreground">
                             {pUsed}/{pLimit == null ? '∞' : pLimit}
                           </span>
                         </div>

@@ -11,9 +11,11 @@ import {
   BUSINESS,
   type PricingSettings,
   SERVICE_LABELS,
-  SPECIAL_ITEMS_CATALOG,
+  SERVICE_UNIT,
+  SERVICE_VARIANTS,
+  variantPrice,
+  UNIT_LABELS,
 } from '@/lib/config'
-import { formatCurrency } from '@/lib/format'
 import { getSettings, saveSettings } from '@/lib/local-store'
 import type { BagSize, ServiceType } from '@/lib/types'
 
@@ -25,6 +27,9 @@ export function AdminSettings() {
   }, [])
 
   if (!settings) return null
+  const bagServices = (Object.keys(settings.basePrices) as ServiceType[]).filter(
+    (service) => SERVICE_UNIT[service] === 'bolsa',
+  )
 
   function setBasePrice(service: ServiceType, value: string) {
     const n = Number(value)
@@ -52,125 +57,178 @@ export function AdminSettings() {
     )
   }
 
+  function setVariantPriceValue(key: string, value: string) {
+    const n = Number(value)
+    if (!Number.isFinite(n)) return
+    setSettings((prev) =>
+      prev ? { ...prev, variantPrices: { ...prev.variantPrices, [key]: n } } : prev,
+    )
+  }
+
   function persist() {
     if (!settings) return
     saveSettings(settings)
-    toast.success('Ajustes guardados. Aplican solo a nuevas órdenes.')
+    toast.success('Precios guardados. Aplican solo a nuevas órdenes.')
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       <Card>
-        <CardContent className="flex flex-col gap-1 p-4">
+        <CardContent className="flex flex-col gap-1 p-3">
           <span className="font-display text-base font-800">{BUSINESS.name}</span>
           <span className="text-sm text-muted-foreground">{BUSINESS.slogan}</span>
         </CardContent>
       </Card>
 
-      <Card>
-        <CardContent className="flex flex-col gap-3 p-4">
-          <span className="font-display text-base font-800">
-            Precios base por servicio
-          </span>
-          <div className="flex flex-col gap-2">
-            {(Object.keys(settings.basePrices) as ServiceType[]).map((s) => (
-              <div key={s} className="grid items-center gap-2 text-sm sm:grid-cols-[1fr_140px]">
-                <span className="font-600">{SERVICE_LABELS[s]}</span>
+      <Button onClick={persist} className="h-10 rounded-md px-6 font-800 self-start">
+        Guardar precios
+      </Button>
+
+      <div className="grid gap-3 xl:grid-cols-2">
+        <Card>
+          <CardContent className="flex flex-col gap-2 p-3">
+            <span className="font-display text-base font-800">Precio de 1 bolsa por servicio</span>
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {bagServices.map((service) => (
+                <div key={service} className="rounded-lg border border-border p-2.5 flex flex-col gap-1">
+                  <span className="text-sm font-700">{SERVICE_LABELS[service]}</span>
+                  <p className="text-xs text-muted-foreground">
+                    Precio base para bolsa completa
+                  </p>
+                  <Input
+                    className="mt-1"
+                    inputMode="decimal"
+                    value={String(settings.basePrices[service])}
+                    onChange={(e) => setBasePrice(service, e.target.value)}
+                  />
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="flex flex-col gap-2 p-3">
+            <span className="font-display text-base font-800">Precios base por servicio</span>
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {(Object.keys(settings.basePrices) as ServiceType[]).map((s) => (
+                <div key={s} className="rounded-lg border border-border p-2.5 flex flex-col gap-1">
+                  <span className="text-sm font-700">
+                    {SERVICE_LABELS[s]}
+                  </span>
+                  <p className="text-xs text-muted-foreground">
+                    {SERVICE_VARIANTS[s]
+                      ? 'se usan precios por prenda'
+                      : `por ${UNIT_LABELS[SERVICE_UNIT[s]].singular}`}
+                  </p>
+                  <Input className="mt-1" inputMode="decimal" value={String(settings.basePrices[s])} onChange={(e) => setBasePrice(s, e.target.value)} />
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="flex flex-col gap-2 p-3">
+            <span className="font-display text-base font-800">Factor por tamaño de bolsa</span>
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {(Object.keys(settings.bagFactors) as Exclude<BagSize, 'custom'>[]).map((size) => (
+                <div key={size} className="rounded-lg border border-border p-2.5 flex flex-col gap-1">
+                  <span className="text-sm font-700">{BAG_LABELS[size]}</span>
+                  <Input
+                    className="mt-1"
+                    inputMode="decimal"
+                    value={String(settings.bagFactors[size])}
+                    onChange={(e) => setBagFactor(size, e.target.value)}
+                  />
+                </div>
+              ))}
+              <div className="rounded-lg border border-border p-2.5 flex flex-col gap-1">
+                <span className="text-sm font-700">Recargo express</span>
                 <Input
+                  className="mt-1"
                   inputMode="decimal"
-                  value={String(settings.basePrices[s])}
-                  onChange={(e) => setBasePrice(s, e.target.value)}
+                  value={String(settings.expressMultiplier)}
+                  onChange={(e) => {
+                    const n = Number(e.target.value)
+                    if (!Number.isFinite(n)) return
+                    setSettings((prev) => (prev ? { ...prev, expressMultiplier: n } : prev))
+                  }}
                 />
               </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+            </div>
+          </CardContent>
+        </Card>
 
-      <Card>
-        <CardContent className="flex flex-col gap-3 p-4">
-          <span className="font-display text-base font-800">
-            Factor por tamaño de bolsa
-          </span>
-          <div className="flex flex-col gap-2">
-            {(
-              Object.keys(settings.bagFactors) as Exclude<BagSize, 'custom'>[]
-            ).map((size) => (
-              <div key={size} className="grid items-center gap-2 text-sm sm:grid-cols-[1fr_140px]">
-                <span className="font-600">{BAG_LABELS[size]}</span>
+        <Card className="xl:col-span-2">
+          <CardContent className="flex flex-col gap-3 p-3">
+            <span className="font-display text-base font-800">Precios por tamaño o prenda</span>
+            <div className="grid gap-2 xl:grid-cols-2">
+              {(Object.keys(SERVICE_VARIANTS) as ServiceType[]).map((s) => (
+                <div key={s} className="rounded-lg border border-border p-3">
+                  <span className="text-sm font-800 text-foreground">{SERVICE_LABELS[s]}</span>
+                  <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                    {SERVICE_VARIANTS[s]!.map((v) => (
+                      <div
+                        key={v.key}
+                        className="rounded-lg border border-border p-2.5 text-sm flex flex-col gap-1"
+                      >
+                        <span className="font-600">{v.fullLabel ?? v.label}</span>
+                        <Input
+                          className="mt-1"
+                          inputMode="decimal"
+                          value={String(variantPrice(settings, s, v))}
+                          onChange={(e) => setVariantPriceValue(`${s}:${v.key}`, e.target.value)}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="flex flex-col gap-2 p-3">
+            <span className="font-display text-base font-800">Tiempos de entrega</span>
+            <p className="text-xs text-muted-foreground">
+              Estos días definen la fecha de entrega por default que sugiere el sistema al crear órdenes.
+            </p>
+            <div className="grid gap-2 text-sm sm:grid-cols-2">
+              <div className="rounded-lg border border-border p-2.5 flex flex-col gap-1">
+                <span className="font-600">Regular (días)</span>
                 <Input
-                  inputMode="decimal"
-                  value={String(settings.bagFactors[size])}
-                  onChange={(e) => setBagFactor(size, e.target.value)}
+                  className="mt-1"
+                  inputMode="numeric"
+                  value={String(settings.promisedDaysRegular)}
+                  onChange={(e) => {
+                    const n = Number.parseInt(e.target.value, 10)
+                    if (!Number.isInteger(n) || n < 0) return
+                    setSettings((prev) => (prev ? { ...prev, promisedDaysRegular: n } : prev))
+                  }}
                 />
               </div>
-            ))}
-            <div className="grid items-center gap-2 text-sm sm:grid-cols-[1fr_140px]">
-              <span className="font-600">Recargo express</span>
-              <Input
-                inputMode="decimal"
-                value={String(settings.expressMultiplier)}
-                onChange={(e) => {
-                  const n = Number(e.target.value)
-                  if (!Number.isFinite(n)) return
-                  setSettings((prev) => (prev ? { ...prev, expressMultiplier: n } : prev))
-                }}
-              />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardContent className="flex flex-col gap-3 p-4">
-          <span className="font-display text-base font-800">
-            Prendas especiales
-          </span>
-          <div className="flex flex-col gap-2">
-            {SPECIAL_ITEMS_CATALOG.map((s) => (
-              <div key={s.name} className="flex justify-between text-sm">
-                <span className="font-600">{s.name}</span>
-                <span className="font-700">{formatCurrency(s.price)}</span>
+              <div className="rounded-lg border border-border p-2.5 flex flex-col gap-1">
+                <span className="font-600">Express (días)</span>
+                <Input
+                  className="mt-1"
+                  inputMode="numeric"
+                  value={String(settings.promisedDaysExpress)}
+                  onChange={(e) => {
+                    const n = Number.parseInt(e.target.value, 10)
+                    if (!Number.isInteger(n) || n < 0) return
+                    setSettings((prev) => (prev ? { ...prev, promisedDaysExpress: n } : prev))
+                  }}
+                />
               </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardContent className="flex flex-col gap-3 p-4">
-          <span className="font-display text-base font-800">Tiempos de entrega</span>
-          <div className="flex flex-col gap-2 text-sm">
-            <div className="grid items-center gap-2 sm:grid-cols-[1fr_140px]">
-              <span className="font-600">Regular</span>
-              <Input
-                inputMode="numeric"
-                value={String(settings.promisedDaysRegular)}
-                onChange={(e) => {
-                  const n = Number.parseInt(e.target.value, 10)
-                  if (!Number.isInteger(n) || n < 0) return
-                  setSettings((prev) => (prev ? { ...prev, promisedDaysRegular: n } : prev))
-                }}
-              />
             </div>
-            <div className="grid items-center gap-2 sm:grid-cols-[1fr_140px]">
-              <span className="font-600">Express</span>
-              <Input
-                inputMode="numeric"
-                value={String(settings.promisedDaysExpress)}
-                onChange={(e) => {
-                  const n = Number.parseInt(e.target.value, 10)
-                  if (!Number.isInteger(n) || n < 0) return
-                  setSettings((prev) => (prev ? { ...prev, promisedDaysExpress: n } : prev))
-                }}
-              />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </div>
 
-      <Button onClick={persist} className="font-700">
-        Guardar ajustes
+      <Button onClick={persist} className="h-10 rounded-md px-6 font-800 self-start">
+        Guardar precios
       </Button>
 
       <div className="flex items-start gap-2 rounded-lg bg-muted p-3 text-xs text-muted-foreground">

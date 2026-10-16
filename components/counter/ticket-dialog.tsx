@@ -4,8 +4,9 @@ import { Printer } from 'lucide-react'
 import { QRCodeCanvas } from 'qrcode.react'
 import { Button } from '@/components/ui/button'
 import { Dialog } from '@/components/ui/dialog'
-import { BAG_LABELS, MODE_LABELS, SERVICE_LABELS } from '@/lib/config'
+import { formatAmount, MODE_LABELS, SERVICE_LABELS } from '@/lib/config'
 import { formatCurrency, formatDate } from '@/lib/format'
+import { useOrderItems } from '@/lib/hooks'
 import type { OrderWithClient } from '@/lib/types'
 
 export function TicketDialog({
@@ -17,9 +18,20 @@ export function TicketDialog({
   offline: boolean
   onClose: () => void
 }) {
+  const { data: items } = useOrderItems(order?.id ?? null)
+
   if (!order) return null
 
-  const ticketCopies = Math.max(1, Math.floor(order.estimated_piece_count ?? 1))
+  const printableItems = (items ?? []).filter((item) => item.quantity > 0)
+  const totalPieces = printableItems.reduce(
+    (sum, item) => sum + (item.kind === 'addon' ? 0 : item.quantity),
+    0,
+  )
+  const basePieces = (order.estimated_piece_count ?? totalPieces) || order.quantity || 1
+  const ticketCopies = Math.max(
+    1,
+    Math.floor(basePieces),
+  )
   const isMultipleOrder = ticketCopies > 1
 
   return (
@@ -64,9 +76,10 @@ export function TicketDialog({
                   <TicketRow label="Servicio" value={SERVICE_LABELS[order.service_type]} />
                   <TicketRow label="Modalidad" value={MODE_LABELS[order.service_mode]} />
                   <TicketRow
-                    label="Bolsa"
-                    value={order.bag_size ? BAG_LABELS[order.bag_size] : '—'}
+                    label="Cantidad"
+                    value={formatAmount(order.service_type, order.bag_size, order.quantity)}
                   />
+                  <TicketRow label="Piezas" value={String(Math.max(1, totalPieces || order.quantity || 1))} />
                   {isMultipleOrder && (
                     <TicketRow label="Pieza" value={`${pieceNumber} de ${ticketCopies}`} />
                   )}
@@ -75,6 +88,23 @@ export function TicketDialog({
                     <TicketRow label="Notas" value={order.customer_instructions} />
                   )}
                 </div>
+                {printableItems.length > 0 && (
+                  <div className="w-full rounded-md border border-neutral-200 p-2 text-left text-xs">
+                    <p className="mb-1 font-700 text-neutral-700">Desglose</p>
+                    <div className="flex flex-col gap-1">
+                      {printableItems.map((item) => (
+                        <div key={item.id} className="flex justify-between gap-2">
+                          <span className="line-clamp-2">
+                            {item.quantity}× {item.name}
+                          </span>
+                          <span className="whitespace-nowrap font-700">
+                            {formatCurrency(item.quantity * item.unit_price)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <div className="my-1 h-px w-full bg-neutral-200" />
                 <div className="flex w-full items-center justify-between">
                   <span className="text-sm font-700">Total</span>
@@ -116,9 +146,29 @@ export function TicketDialog({
                 <TicketRow label="Cliente" value={order.client.name} />
                 <TicketRow label="Teléfono" value={order.client.phone} />
                 <TicketRow label="Servicio" value={SERVICE_LABELS[order.service_type]} />
-                <TicketRow label="Total de piezas" value={String(ticketCopies)} />
+                <TicketRow
+                  label="Total de piezas"
+                  value={String(Math.max(1, totalPieces || ticketCopies))}
+                />
                 <TicketRow label="Entrega est." value={formatDate(order.promised_date)} />
               </div>
+              {printableItems.length > 0 && (
+                <div className="w-full rounded-md border border-neutral-200 p-2 text-left text-xs">
+                  <p className="mb-1 font-700 text-neutral-700">Desglose</p>
+                  <div className="flex flex-col gap-1">
+                    {printableItems.map((item) => (
+                      <div key={item.id} className="flex justify-between gap-2">
+                        <span className="line-clamp-2">
+                          {item.quantity}× {item.name}
+                        </span>
+                        <span className="whitespace-nowrap font-700">
+                          {formatCurrency(item.quantity * item.unit_price)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div className="my-1 h-px w-full bg-neutral-200" />
               <div className="flex w-full items-center justify-between">
                 <span className="text-sm font-700">Total</span>

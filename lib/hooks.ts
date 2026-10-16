@@ -34,6 +34,15 @@ export function useOrderHistory(orderId: string | null) {
   })
 }
 
+export function useClients() {
+  return useQuery({
+    queryKey: ['clients'],
+    queryFn: svc.listClients,
+    refetchInterval: 30000,
+    refetchOnWindowFocus: true,
+  })
+}
+
 export function useAdvanceStatus() {
   const qc = useQueryClient()
   return useMutation({

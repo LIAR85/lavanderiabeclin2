@@ -6,5 +6,6 @@ minimumReleaseAgeExclude:
   - wrangler@4.136.3
 
 allowBuilds:
+  core-js: set this to true or false
   esbuild: true
   workerd: true

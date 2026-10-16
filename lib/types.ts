@@ -1,8 +1,11 @@
 export type ServiceType =
   | 'lavado'
+  | 'lavado_secado'
   | 'lavado_planchado'
   | 'edredones'
+  | 'ropa_cama'
   | 'tintoreria'
+  | 'tenis'
   | 'planchado'
   | 'secado'
   | 'otro'
@@ -41,12 +44,16 @@ export interface Client {
   updated_at: string
 }
 
+export type OrderItemKind = 'service' | 'addon' | 'extra'
+
 export interface OrderItem {
   id: string
   order_id: string
   name: string
   quantity: number
   unit_price: number
+  kind?: OrderItemKind | null
+  variant_key?: string | null
 }
 
 export interface OrderStatusHistoryEntry {
@@ -95,6 +102,8 @@ export interface SpecialItemInput {
   name: string
   quantity: number
   unit_price: number
+  kind?: OrderItemKind
+  variant_key?: string
 }
 
 export interface NewOrderInput {
@@ -105,6 +114,8 @@ export interface NewOrderInput {
   custom_bag_factor?: number
   quantity: number
   estimated_piece_count?: number
+  /** Per-size/per-garment lines for services quantified by variants. */
+  service_lines?: SpecialItemInput[]
   special_items: SpecialItemInput[]
   customer_instructions?: string
   notes?: string

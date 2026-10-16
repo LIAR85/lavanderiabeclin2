@@ -50,6 +50,16 @@ export async function findClientByPhone(phone: string): Promise<Client | null> {
   return (data as Client) ?? null
 }
 
+export async function listClients(): Promise<Client[]> {
+  const { data, error } = await supabase()
+    .from('clients')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(500)
+  if (error) throw error
+  return (data ?? []) as Client[]
+}
+
 async function upsertClient(input: {
   name: string
   phone: string
@@ -129,17 +139,26 @@ export async function createOrder(
 
   const typedOrder = order as Order
 
-  if (input.special_items.length > 0) {
-    const { error: itemsError } = await supabase()
-      .from('order_items')
-      .insert(
-        input.special_items.map((it) => ({
-          order_id: typedOrder.id,
-          name: it.name,
-          quantity: it.quantity,
-          unit_price: it.unit_price,
-        })),
-      )
+  const orderLines = [
+    ...(input.service_lines ?? []).map((it) => ({ ...it, kind: it.kind ?? 'service' })),
+    ...input.special_items.map((it) => ({ ...it, kind: 'extra' as const })),
+  ]
+  if (orderLines.length > 0) {
+    const rows = orderLines.map((it) => ({
+      order_id: typedOrder.id,
+      name: it.name,
+      quantity: it.quantity,
+      unit_price: it.unit_price,
+      kind: it.kind,
+      variant_key: it.variant_key ?? null,
+    }))
+    let { error: itemsError } = await supabase().from('order_items').insert(rows)
+    // Databases not yet migrated lack kind/variant_key; retry with the legacy columns.
+    if (itemsError && ['PGRST204', '42703'].includes(itemsError.code)) {
+      ;({ error: itemsError } = await supabase()
+        .from('order_items')
+        .insert(rows.map(({ kind: _k, variant_key: _v, ...legacy }) => legacy)))
+    }
     if (itemsError) throw itemsError
   }
 

@@ -44,7 +44,11 @@ create table if not exists public.order_items (
   order_id uuid not null references public.orders(id) on delete cascade,
   name text not null,
   quantity integer not null default 1,
-  unit_price numeric not null default 0
+  unit_price numeric not null default 0,
+  -- 'service' = línea del servicio (tamaño/prenda), 'addon' = extra del servicio
+  -- (Lysol, Suavitel, gancho extra), 'extra' = pieza especial.
+  kind text not null default 'extra' check (kind in ('service', 'addon', 'extra')),
+  variant_key text
 );
 
 create table if not exists public.order_status_history (
@@ -88,6 +92,10 @@ create table if not exists public.delivery_capacity (
 
 create index if not exists orders_client_id_idx on public.orders(client_id);
 create index if not exists order_items_order_id_idx on public.order_items(order_id);
+create index if not exists orders_status_idx on public.orders(status);
+create index if not exists orders_promised_date_idx on public.orders(promised_date);
+create index if not exists orders_created_at_idx on public.orders(created_at desc);
+create index if not exists orders_service_type_idx on public.orders(service_type);
 create index if not exists order_status_history_order_id_idx on public.order_status_history(order_id);
 create index if not exists employee_attendance_employee_id_idx on public.employee_attendance(employee_id);
 

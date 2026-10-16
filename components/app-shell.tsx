@@ -16,6 +16,8 @@ import { cn } from '@/lib/utils'
 
 type Tab = 'reception' | 'process' | 'scanner' | 'calendar' | 'checker' | 'admin'
 
+const WIDE_TABS: Tab[] = ['reception', 'process', 'scanner', 'calendar', 'admin']
+
 const NAV: { key: Tab; label: string; icon: typeof LayoutGrid }[] = [
   { key: 'reception', label: 'Recepción', icon: PlusCircle },
   { key: 'process', label: 'Proceso', icon: LayoutGrid },
@@ -95,7 +97,12 @@ export function AppShell() {
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-5 pb-24 sm:pb-8">
+      <main
+        className={cn(
+          'mx-auto w-full flex-1 px-4 py-5 pb-24 sm:pb-8',
+          WIDE_TABS.includes(tab) ? 'max-w-none lg:px-6' : 'max-w-6xl',
+        )}
+      >
         {tab === 'reception' && (
           <NewOrderForm
             online={online}

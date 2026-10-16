@@ -27,7 +27,14 @@ function write<T>(key: string, value: T): void {
 
 // ---- Settings ----
 export function getSettings(): PricingSettings {
-  return read<PricingSettings>('settings', DEFAULT_SETTINGS)
+  const stored = read<Partial<PricingSettings>>('settings', DEFAULT_SETTINGS)
+  return {
+    ...DEFAULT_SETTINGS,
+    ...stored,
+    basePrices: { ...DEFAULT_SETTINGS.basePrices, ...stored.basePrices },
+    bagFactors: { ...DEFAULT_SETTINGS.bagFactors, ...stored.bagFactors },
+    variantPrices: { ...stored.variantPrices },
+  }
 }
 export function saveSettings(s: PricingSettings) {
   write('settings', s)
