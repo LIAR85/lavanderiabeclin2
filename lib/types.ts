@@ -90,6 +90,7 @@ export interface Order {
   anomaly_tags: string[]
   has_anomalies: boolean
   notes: string | null
+  delivery_date_confirmed?: boolean
   created_at: string
   updated_at: string
 }
@@ -120,9 +121,11 @@ export interface NewOrderInput {
   customer_instructions?: string
   notes?: string
   payment_timing: PaymentTiming
+  payment_status?: PaymentStatus
   promised_date: string
   subtotal: number
   extras_total: number
   total: number
   charged_total?: number
+  delivery_date_confirmed?: boolean
 }

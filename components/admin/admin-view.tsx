@@ -20,6 +20,7 @@ import { AdminDeliveryCalendar } from './admin-delivery-calendar'
 import { AdminExpenses } from './admin-expenses'
 import { AdminHistory } from './admin-history'
 import { AdminInventory } from './admin-inventory'
+import { AdminLegacyOrders } from './admin-legacy-orders'
 import { AdminClients } from './admin-clients'
 import { AdminMetrics } from './admin-metrics'
 import { AdminPeople } from './admin-people'
@@ -33,6 +34,7 @@ type Tab =
   | 'people'
   | 'calendar'
   | 'history'
+  | 'legacy_orders'
   | 'settings'
 
 const TABS: { key: Tab; label: string; icon: typeof TrendingUp }[] = [
@@ -43,6 +45,7 @@ const TABS: { key: Tab; label: string; icon: typeof TrendingUp }[] = [
   { key: 'people', label: 'Personal', icon: Users },
   { key: 'calendar', label: 'Calendario', icon: CalendarDays },
   { key: 'history', label: 'Historial', icon: Receipt },
+  { key: 'legacy_orders', label: 'Órdenes antiguas', icon: Receipt },
   { key: 'settings', label: 'Precios', icon: Settings2 },
 ]
 
@@ -78,6 +81,8 @@ export function AdminView() {
         return <AdminDeliveryCalendar />
       case 'history':
         return <AdminHistory />
+      case 'legacy_orders':
+        return <AdminLegacyOrders />
       case 'settings':
         return <AdminSettings />
     }

@@ -7,12 +7,21 @@ import type {
   NewOrderInput,
   Order,
   OrderItem,
+  PaymentStatus,
   OrderStatus,
   OrderStatusHistoryEntry,
   OrderWithClient,
 } from './types'
 
 const supabase = () => createClient()
+
+function isMissingColumnError(error: { code?: string; message?: string }, column?: string): boolean {
+  if (!error) return false
+  const knownCode = ['PGRST204', '42703'].includes(error.code ?? '')
+  if (!knownCode) return false
+  if (!column) return true
+  return (error.message ?? '').includes(column)
+}
 
 function pad4(n: number) {
   return String(n).padStart(4, '0')
@@ -99,42 +108,59 @@ export async function createOrder(
 ): Promise<OrderWithClient> {
   const client = await upsertClient(input.client)
   const order_number = orderNumber ?? (await generateOrderNumber())
+  const effectivePaymentStatus: PaymentStatus =
+    input.payment_status ??
+    (input.payment_timing === 'on_receipt' ? 'paid' : 'pending')
+  const effectiveChargedTotal =
+    typeof input.charged_total === 'number'
+      ? input.charged_total
+      : effectivePaymentStatus === 'paid'
+        ? input.total
+        : null
   const hasManualChargeOverride =
-    input.payment_timing === 'on_receipt' &&
-    typeof input.charged_total === 'number' &&
-    Math.abs(input.charged_total - input.total) > 0.001
+    effectivePaymentStatus === 'paid' &&
+    typeof effectiveChargedTotal === 'number' &&
+    Math.abs(effectiveChargedTotal - input.total) > 0.001
 
-  const { data: order, error } = await supabase()
+  const insertPayload = {
+    order_number,
+    client_id: client.id,
+    service_type: input.service_type,
+    service_mode: input.service_mode,
+    bag_size: input.bag_size,
+    estimated_piece_count: input.estimated_piece_count ?? null,
+    quantity: input.quantity,
+    promised_date: input.promised_date,
+    subtotal: input.subtotal,
+    extras_total: input.extras_total,
+    total: input.total,
+    status: 'received',
+    visible_status: 'RECIBIDA',
+    customer_instructions: input.customer_instructions || null,
+    payment_timing: input.payment_timing,
+    payment_status: effectivePaymentStatus,
+    charged_total: effectiveChargedTotal,
+    price_overridden: hasManualChargeOverride,
+    price_override_note: hasManualChargeOverride
+      ? 'Cobro manual capturado al crear la orden'
+      : null,
+    notes: input.notes || null,
+    delivery_date_confirmed: input.delivery_date_confirmed ?? true,
+  }
+
+  let { data: order, error } = await supabase()
     .from('orders')
-    .insert({
-      order_number,
-      client_id: client.id,
-      service_type: input.service_type,
-      service_mode: input.service_mode,
-      bag_size: input.bag_size,
-      estimated_piece_count: input.estimated_piece_count ?? null,
-      quantity: input.quantity,
-      promised_date: input.promised_date,
-      subtotal: input.subtotal,
-      extras_total: input.extras_total,
-      total: input.total,
-      status: 'received',
-      visible_status: 'RECIBIDA',
-      customer_instructions: input.customer_instructions || null,
-      payment_timing: input.payment_timing,
-      payment_status: input.payment_timing === 'on_receipt' ? 'paid' : 'pending',
-      charged_total:
-        input.payment_timing === 'on_receipt'
-          ? input.charged_total ?? input.total
-          : null,
-      price_overridden: hasManualChargeOverride,
-      price_override_note: hasManualChargeOverride
-        ? 'Cobro manual capturado al crear la orden'
-        : null,
-      notes: input.notes || null,
-    })
+    .insert(insertPayload)
     .select('*')
     .single()
+  if (error && isMissingColumnError(error, 'delivery_date_confirmed')) {
+    const { delivery_date_confirmed: _legacy, ...legacyPayload } = insertPayload
+    ;({ data: order, error } = await supabase()
+      .from('orders')
+      .insert(legacyPayload)
+      .select('*')
+      .single())
+  }
   if (error) throw error
 
   const typedOrder = order as Order
@@ -170,6 +196,72 @@ export async function createOrder(
   })
 
   return { ...typedOrder, client }
+}
+
+export async function createLegacyOrder(input: {
+  client: { name: string; phone: string; email?: string }
+  service_type: Order['service_type']
+  service_mode: Order['service_mode']
+  quantity: number
+  promised_date: string
+  subtotal: number
+  extras_total: number
+  total: number
+  paid_amount: number
+  status: OrderStatus
+  notes?: string
+  created_at: string
+  delivery_date_confirmed: boolean
+}): Promise<OrderWithClient> {
+  const normalizedPaidAmount = Math.max(0, Math.min(input.total, input.paid_amount))
+  const paymentStatus: PaymentStatus = normalizedPaidAmount >= input.total ? 'paid' : 'pending'
+  const visible = STATUS_TO_VISIBLE[input.status]
+  const noteParts = [input.notes?.trim()]
+  if (normalizedPaidAmount > 0 && paymentStatus === 'pending') {
+    noteParts.push(
+      `Abono inicial: $${normalizedPaidAmount.toFixed(2)} · Saldo pendiente: $${(input.total - normalizedPaidAmount).toFixed(2)}`,
+    )
+  }
+  const created = await createOrder(
+    {
+      client: input.client,
+      service_type: input.service_type,
+      service_mode: input.service_mode,
+      bag_size: 'full',
+      quantity: Math.max(1, Math.floor(input.quantity)),
+      promised_date: input.promised_date,
+      subtotal: input.subtotal,
+      extras_total: input.extras_total,
+      total: input.total,
+      payment_timing: normalizedPaidAmount > 0 ? 'on_receipt' : 'on_delivery',
+      payment_status: paymentStatus,
+      charged_total: normalizedPaidAmount > 0 ? normalizedPaidAmount : undefined,
+      special_items: [],
+      notes: noteParts.filter(Boolean).join(' · ') || undefined,
+      delivery_date_confirmed: input.delivery_date_confirmed,
+    },
+  )
+
+  const updatePayload = {
+    status: input.status,
+    visible_status: visible,
+    created_at: input.created_at,
+    updated_at: input.created_at,
+  }
+  await supabase().from('orders').update(updatePayload).eq('id', created.id)
+
+  await supabase().from('order_status_history').delete().eq('order_id', created.id)
+  await supabase()
+    .from('order_status_history')
+    .insert({
+      order_id: created.id,
+      status: input.status,
+      visible_status: visible,
+      note: 'Orden antigua capturada manualmente',
+      created_at: input.created_at,
+    })
+
+  return { ...created, ...updatePayload }
 }
 
 export async function listOrders(): Promise<OrderWithClient[]> {

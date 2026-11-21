@@ -23,6 +23,7 @@ interface OrderCreatedPayload {
   }>
   total?: number
   promisedDateIso?: string
+  deliveryDateConfirmed?: boolean
 }
 
 function formatDate(iso: string) {
@@ -36,22 +37,6 @@ function formatDate(iso: string) {
 }
 
 export async function POST(request: Request) {
-  if (RESEND_DISABLED) {
-    return NextResponse.json({ ok: true, skipped: true, reason: 'RESEND_DISABLED' })
-  }
-
-  const apiKey = process.env.RESEND_API_KEY
-  const fromEmail = process.env.RESEND_FROM_EMAIL
-
-  if (!apiKey || !fromEmail) {
-    return NextResponse.json(
-      { error: 'Faltan variables RESEND_API_KEY o RESEND_FROM_EMAIL.' },
-      { status: 500 },
-    )
-  }
-
-  const resend = new Resend(apiKey)
-
   const body = (await request.json().catch(() => null)) as OrderCreatedPayload | null
 
   if (!body?.orderNumber || !body.clientName || !body.serviceType || typeof body.total !== 'number') {
@@ -66,11 +51,8 @@ export async function POST(request: Request) {
     recipients.push(body.clientEmail)
   }
 
-  if (recipients.length === 0) {
-    return NextResponse.json({ ok: true, skipped: true, reason: 'NO_RECIPIENTS' })
-  }
-
   const serviceLabel = SERVICE_LABELS[body.serviceType] ?? body.serviceType
+  const showPromisedDate = body.deliveryDateConfirmed !== false && !!body.promisedDateIso
   const promisedDate = body.promisedDateIso ? formatDate(body.promisedDateIso) : 'Sin fecha'
   const total = new Intl.NumberFormat('es-MX', {
     style: 'currency',
@@ -165,10 +147,10 @@ export async function POST(request: Request) {
                     <td style="padding:11px 16px; font-size:13px; color:#64748b; border-bottom:1px solid #e6f0ff;">Piezas recibidas</td>
                     <td style="padding:11px 16px; text-align:right; font-size:14px; font-weight:600; color:#1f2a44; border-bottom:1px solid #e6f0ff;">${pieceCount}</td>
                   </tr>` : ''}
-                  <tr>
+                  ${showPromisedDate ? `<tr>
                     <td style="padding:11px 16px; font-size:13px; color:#64748b;">Entrega estimada</td>
                     <td style="padding:11px 16px; text-align:right; font-size:14px; font-weight:600; color:#1f2a44;">${promisedDate}</td>
-                  </tr>
+                  </tr>` : ''}
                   ${orderLinesHtml}
                   <tr>
                     <td style="padding:14px 16px; font-size:15px; font-weight:700; color:#0f172a; background:#eff6ff; border-top:1px solid #d9e9ff;">Total</td>
@@ -217,26 +199,53 @@ export async function POST(request: Request) {
       </tr>
     </table>
   `
+  const warnings: string[] = []
+  let emailSent = false
 
-  const { error } = await resend.emails.send({
-    from: fromEmail,
-    to: recipients,
-    replyTo: REPLY_TO_EMAIL,
-    subject,
-    html,
-  })
+  if (!RESEND_DISABLED && recipients.length > 0) {
+    const apiKey = process.env.RESEND_API_KEY
+    const fromEmail = process.env.RESEND_FROM_EMAIL
+    if (!apiKey || !fromEmail) {
+      warnings.push('Correo omitido: faltan RESEND_API_KEY o RESEND_FROM_EMAIL.')
+    } else {
+      const resend = new Resend(apiKey)
+      const { error } = await resend.emails.send({
+        from: fromEmail,
+        to: recipients,
+        replyTo: REPLY_TO_EMAIL,
+        subject,
+        html,
+      })
+      if (error) {
+        warnings.push(
+          error.message ||
+            'Correo omitido: Resend rechazo el envio. Revisa llaves y dominio del remitente.',
+        )
+      } else {
+        emailSent = true
+      }
+    }
+  }
 
-  if (error) {
+  if (!emailSent) {
+    if (!body.clientEmail) {
+      return NextResponse.json(
+        { ok: true, skipped: true, reason: 'NO_DESTINATION', warnings },
+        { status: 200 },
+      )
+    }
     return NextResponse.json(
       {
-        error: 'Resend rechazo el envio.',
-        detail:
-          error.message ||
-          'Verifica RESEND_API_KEY, RESEND_FROM_EMAIL y que el dominio del remitente este verificado en Resend.',
+        error: 'No se pudo enviar ninguna notificacion automatica.',
+        detail: warnings.join(' | ') || 'Verifica la configuración de correo.',
       },
       { status: 502 },
     )
   }
 
-  return NextResponse.json({ ok: true })
+  return NextResponse.json({
+    ok: true,
+    channels: { email: emailSent },
+    warnings,
+  })
 }

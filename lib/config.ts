@@ -7,8 +7,8 @@ import type {
 } from './types'
 
 export const SERVICE_LABELS: Record<ServiceType, string> = {
-  lavado: 'Lavado',
-  lavado_secado: 'Lavado/secado',
+  lavado: 'Lavado por bolsa',
+  lavado_secado: 'Lavado secado por bolsa',
   lavado_planchado: 'Lavado + Planchado',
   edredones: 'Edredones',
   ropa_cama: 'Ropa de cama',

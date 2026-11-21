@@ -19,6 +19,7 @@ import {
   isOverdue,
 } from '@/lib/format'
 import { useOrders } from '@/lib/hooks'
+import { hasPartialPayment, pendingAmount } from '@/lib/payments'
 import type { OrderStatus, OrderWithClient } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { OrderDetailDialog } from './order-detail-dialog'
@@ -341,6 +342,11 @@ export function ProcessBoard() {
                         )}
                         {order.payment_status === 'paid' && (
                           <Badge variant="success">Pagado</Badge>
+                        )}
+                        {hasPartialPayment(order) && (
+                          <Badge variant="outline">
+                            Saldo {formatCurrency(pendingAmount(order))}
+                          </Badge>
                         )}
                       </div>
 

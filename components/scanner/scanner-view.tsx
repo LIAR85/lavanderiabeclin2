@@ -10,6 +10,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { formatCurrency, formatDate, formatRelative } from '@/lib/format'
 import { useDeliverByFolio, useOrders } from '@/lib/hooks'
+import { pendingAmount } from '@/lib/payments'
 import type { OrderWithClient } from '@/lib/types'
 
 export function ScannerView() {
@@ -180,7 +181,7 @@ export function ScannerView() {
               </p>
               {result.order.payment_status !== 'paid' && (
                 <p className="text-sm font-700 text-warning-foreground">
-                  Recuerda cobrar {formatCurrency(result.order.total)}
+                  Recuerda cobrar saldo {formatCurrency(pendingAmount(result.order))}
                 </p>
               )}
             </CardContent>

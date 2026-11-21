@@ -14,6 +14,7 @@ import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Dialog } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -55,17 +56,13 @@ import type {
 import { cn } from '@/lib/utils'
 import { SERVICE_ICONS } from './service-icons'
 
-const FRACTION_OPTIONS: Exclude<BagSize, 'full' | 'custom'>[] = [
-  'quarter',
-  'half',
-  'threequarter',
-]
-const COUNT_OPTIONS = [1, 2, 3, 5, 10]
-const FRACTION_SYMBOLS: Record<(typeof FRACTION_OPTIONS)[number], string> = {
-  quarter: '¼',
+const BAG_FRACTION_OPTIONS = ['half'] as const satisfies readonly Exclude<BagSize, 'full' | 'custom'>[]
+const BAG_COUNT_OPTIONS = [1, 2, 3, 4, 5]
+const DEFAULT_COUNT_OPTIONS = [1, 2, 3, 5, 10]
+const BAG_FRACTION_SYMBOLS: Record<(typeof BAG_FRACTION_OPTIONS)[number], string> = {
   half: '½',
-  threequarter: '¾',
 }
+const IRONING_PIECE_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 type ServiceAmountSelection = {
   bagSize: BagSize
   quantity: string
@@ -91,6 +88,12 @@ function toPromisedIsoAt3pm(dateInput: string): string {
   const [y, m, d] = dateInput.split('-').map(Number)
   const dt = new Date(y, (m || 1) - 1, d || 1, 15, 0, 0, 0)
   return dt.toISOString()
+}
+
+function dateInputWithDaysFromNow(days: number): string {
+  const d = new Date()
+  d.setDate(d.getDate() + days)
+  return toDateInput(d)
 }
 
 function getErrorMessage(err: unknown): string {
@@ -156,6 +159,7 @@ export function NewOrderForm({
   const [otherDescription, setOtherDescription] = useState('')
   const [otherUnitPrice, setOtherUnitPrice] = useState('')
   const [pieceCount, setPieceCount] = useState('')
+  const [manualIroningPieces, setManualIroningPieces] = useState(false)
   const [deliveryDate, setDeliveryDate] = useState(() =>
     toDateInput(computePromisedDate(settings, 'regular')),
   )
@@ -172,6 +176,11 @@ export function NewOrderForm({
   )
   const [manualChargeEnabled, setManualChargeEnabled] = useState(false)
   const [manualChargeAmount, setManualChargeAmount] = useState('')
+  const [capturePartialPayment, setCapturePartialPayment] = useState(false)
+  const [partialPaymentAmount, setPartialPaymentAmount] = useState('')
+  const [requiresSpecificDeliveryDate, setRequiresSpecificDeliveryDate] = useState(false)
+  const [confirmPartialOpen, setConfirmPartialOpen] = useState(false)
+  const [confirmDeliveryOpen, setConfirmDeliveryOpen] = useState(false)
   const [notes, setNotes] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
@@ -416,9 +425,12 @@ export function NewOrderForm({
     ],
   )
 
+  const fallbackDeliveryDate = useMemo(() => dateInputWithDaysFromNow(3), [])
+  const effectiveDeliveryDateInput =
+    requiresSpecificDeliveryDate && deliveryDate ? deliveryDate : fallbackDeliveryDate
   const promisedDate = useMemo(
-    () => toPromisedIsoAt3pm(deliveryDate),
-    [deliveryDate],
+    () => toPromisedIsoAt3pm(effectiveDeliveryDateInput),
+    [effectiveDeliveryDateInput],
   )
 
   const ironingRestricted = useMemo(
@@ -436,13 +448,13 @@ export function NewOrderForm({
   const pieceCountValid = !ironingRestricted || parsedPieceCount != null
 
   const ironingCapacity = useMemo(
-    () => getIroningPieceLimit(deliveryDate, serviceType),
-    [deliveryDate, serviceType],
+    () => getIroningPieceLimit(effectiveDeliveryDateInput, serviceType),
+    [effectiveDeliveryDateInput, serviceType],
   )
 
   const scheduledIroning = useMemo(
-    () => getScheduledIroningPieces(orders ?? [], deliveryDate, serviceType),
-    [orders, deliveryDate, serviceType],
+    () => getScheduledIroningPieces(orders ?? [], effectiveDeliveryDateInput, serviceType),
+    [orders, effectiveDeliveryDateInput, serviceType],
   )
 
   const requestedIroningPieces = parsedPieceCount ?? 0
@@ -451,11 +463,27 @@ export function NewOrderForm({
     ironingCapacity == null ||
     scheduledIroning + requestedIroningPieces <= ironingCapacity
 
+  function pickIroningPieces(n: number) {
+    setPieceCount(String(n))
+    setManualIroningPieces(false)
+  }
+
+  function pickManualIroningPieces() {
+    setPieceCount('')
+    setManualIroningPieces(true)
+  }
+
   const chargeAmount = useMemo(() => {
     if (!manualChargeEnabled) return price.total
     const parsed = Number(manualChargeAmount)
     return Number.isFinite(parsed) && parsed > 0 ? parsed : 0
   }, [manualChargeAmount, manualChargeEnabled, price.total])
+
+  const partialAmount = useMemo(() => {
+    const parsed = Number(partialPaymentAmount)
+    if (!Number.isFinite(parsed) || parsed <= 0) return 0
+    return parsed
+  }, [partialPaymentAmount])
 
   function toggleInstruction(preset: string) {
     setInstructions((prev) =>
@@ -473,6 +501,7 @@ export function NewOrderForm({
     setAmountByService({})
     setVariantQtyByService({})
     setPieceCount('')
+    setManualIroningPieces(false)
     setOtherDescription('')
     setOtherUnitPrice('')
     setDeliveryDate(toDateInput(computePromisedDate(settings, 'regular')))
@@ -485,6 +514,11 @@ export function NewOrderForm({
     setPaymentTiming('on_delivery')
     setManualChargeEnabled(false)
     setManualChargeAmount('')
+    setCapturePartialPayment(false)
+    setPartialPaymentAmount('')
+    setRequiresSpecificDeliveryDate(false)
+    setConfirmPartialOpen(false)
+    setConfirmDeliveryOpen(false)
     setNotes('')
   }
 
@@ -496,7 +530,8 @@ export function NewOrderForm({
     pieceCount?: number
     orderLines?: Array<{ name: string; quantity: number; unitPrice: number }>
     total: number
-    promisedDateIso: string
+    promisedDateIso?: string
+    deliveryDateConfirmed: boolean
   }) {
     const response = await fetch('/api/notifications/order-created', {
       method: 'POST',
@@ -517,8 +552,8 @@ export function NewOrderForm({
       toast.error('Captura nombre y teléfono válido del cliente')
       return
     }
-    if (!deliveryDate) {
-      toast.error('Selecciona una fecha de entrega')
+    if (requiresSpecificDeliveryDate && !deliveryDate) {
+      toast.error('Selecciona la fecha específica de entrega')
       return
     }
     if (!(amountQty > 0)) {
@@ -543,6 +578,41 @@ export function NewOrderForm({
       toast.error('Captura un monto manual de cobro válido')
       return
     }
+    setCapturePartialPayment(false)
+    setPartialPaymentAmount('')
+    setRequiresSpecificDeliveryDate(dateTouched)
+    setConfirmDeliveryOpen(false)
+    setConfirmPartialOpen(true)
+  }
+
+  function continueFromPartialModal() {
+    if (capturePartialPayment && (partialAmount <= 0 || partialAmount >= price.total)) {
+      toast.error('El abono parcial debe ser mayor a 0 y menor al total')
+      return
+    }
+    setConfirmPartialOpen(false)
+    setConfirmDeliveryOpen(true)
+  }
+
+  function closeConfirmationModals() {
+    if (submitting) return
+    setConfirmPartialOpen(false)
+    setConfirmDeliveryOpen(false)
+  }
+
+  async function confirmCreateOrder() {
+    const paymentTimingForOrder = capturePartialPayment ? 'on_receipt' : paymentTiming
+    const paymentStatusForOrder = capturePartialPayment
+      ? 'pending'
+      : paymentTiming === 'on_receipt'
+        ? 'paid'
+        : 'pending'
+    const chargedTotalForOrder = capturePartialPayment
+      ? partialAmount
+      : paymentTiming === 'on_receipt'
+        ? chargeAmount
+        : undefined
+
     const allInstructions = [
       ...instructions,
       ...(freeInstruction.trim() ? [freeInstruction.trim()] : []),
@@ -571,12 +641,14 @@ export function NewOrderForm({
       special_items: specialItems,
       customer_instructions: allInstructions || undefined,
       notes: notes.trim() || undefined,
-      payment_timing: paymentTiming,
+      payment_timing: paymentTimingForOrder,
+      payment_status: paymentStatusForOrder,
       promised_date: promisedDate,
       subtotal: price.subtotal,
       extras_total: price.extrasTotal,
       total: price.total,
-      charged_total: paymentTiming === 'on_receipt' ? chargeAmount : undefined,
+      charged_total: chargedTotalForOrder,
+      delivery_date_confirmed: requiresSpecificDeliveryDate,
     }
 
     setSubmitting(true)
@@ -593,8 +665,9 @@ export function NewOrderForm({
             serviceType: order.service_type,
             pieceCount: amountQty || undefined,
             orderLines: emailOrderLines,
-            total: chargeAmount,
-            promisedDateIso: order.promised_date ?? promisedDate,
+            total: capturePartialPayment ? price.total : chargeAmount,
+            promisedDateIso: requiresSpecificDeliveryDate ? order.promised_date ?? promisedDate : undefined,
+            deliveryDateConfirmed: requiresSpecificDeliveryDate,
           })
         } catch (emailErr) {
           console.warn('[v0] sendOrderCreatedEmail warning', emailErr)
@@ -633,18 +706,19 @@ export function NewOrderForm({
           status: 'received',
           visible_status: 'RECIBIDA',
           customer_instructions: allInstructions || null,
-          payment_timing: paymentTiming,
-          payment_status: paymentTiming === 'on_receipt' ? 'paid' : 'pending',
-          charged_total: paymentTiming === 'on_receipt' ? chargeAmount : null,
+          payment_timing: paymentTimingForOrder,
+          payment_status: paymentStatusForOrder,
+          charged_total: chargedTotalForOrder ?? null,
           price_overridden:
-            paymentTiming === 'on_receipt' && Math.abs(chargeAmount - price.total) > 0.001,
+            paymentStatusForOrder === 'paid' && Math.abs((chargedTotalForOrder ?? 0) - price.total) > 0.001,
           price_override_note:
-            paymentTiming === 'on_receipt' && Math.abs(chargeAmount - price.total) > 0.001
+            paymentStatusForOrder === 'paid' && Math.abs((chargedTotalForOrder ?? 0) - price.total) > 0.001
               ? 'Cobro manual capturado al crear la orden'
               : null,
           anomaly_tags: [],
           has_anomalies: false,
           notes: notes.trim() || null,
+          delivery_date_confirmed: requiresSpecificDeliveryDate,
           created_at: nowIso,
           updated_at: nowIso,
           client: {
@@ -662,6 +736,8 @@ export function NewOrderForm({
         })
         reset()
       }
+      setConfirmPartialOpen(false)
+      setConfirmDeliveryOpen(false)
     } catch (err) {
       const details = getErrorMessage(err)
       console.error('[v0] createOrder error', {
@@ -688,18 +764,38 @@ export function NewOrderForm({
   const hasMixedServices = selectedServiceTypes.length > 1
   const instructionsCount = instructions.length + (freeInstruction.trim() ? 1 : 0)
   const quickBreakdown = useMemo(() => {
+    const formatQtyByUnit = (qty: number, service?: ServiceType) => {
+      if (!service) return `${qty} pza(s)`
+      const unit = UNIT_LABELS[SERVICE_UNIT[service]]
+      return `${qty} ${qty === 1 ? unit.singular : unit.plural}`
+    }
+
     const serviceRows = (globalServiceLines ?? []).map((line) => ({
-      label: line.name,
-      quantity: line.quantity,
+      label:
+        line.variant_key === 'otro:manual'
+          ? line.name.replace(/^Otro ·\s*/, '')
+          : line.name,
+      quantityLabel: (() => {
+        const serviceFromLine = line.variant_key?.split(':')[0]
+        const lineService = SERVICE_ORDER.includes(serviceFromLine as ServiceType)
+          ? (serviceFromLine as ServiceType)
+          : undefined
+        const baseQtyLabel = formatQtyByUnit(line.quantity, lineService)
+        return parsedPieceCount != null &&
+          line.kind !== 'addon' &&
+          line.variant_key?.startsWith('lavado_planchado:')
+          ? `${baseQtyLabel} · ${parsedPieceCount} pza(s) a planchar`
+          : baseQtyLabel
+      })(),
       amount: line.quantity * line.unit_price,
     }))
     const extrasRows = specialItems.map((item) => ({
       label: `Especial · ${item.name}`,
-      quantity: item.quantity,
+      quantityLabel: `${item.quantity} pza(s)`,
       amount: item.quantity * item.unit_price,
     }))
     return [...serviceRows, ...extrasRows]
-  }, [globalServiceLines, specialItems])
+  }, [globalServiceLines, parsedPieceCount, specialItems])
 
   return (
     <form
@@ -894,20 +990,20 @@ export function NewOrderForm({
                   </>
                 ) : (
                   <>
-                <Label>Cantidad de {unitLabels.plural}</Label>
+                    <Label>Cantidad de {unitLabels.plural}</Label>
                     <div className="flex flex-wrap gap-2">
                       {isBagUnit &&
-                        FRACTION_OPTIONS.map((f) => (
+                        BAG_FRACTION_OPTIONS.map((f) => (
                           <AmountChip
                             key={f}
-                            big={FRACTION_SYMBOLS[f]}
+                            big={BAG_FRACTION_SYMBOLS[f]}
                             caption={unitLabels.singular}
                             amountLabel={showBagFramePrices ? bagOptionPrice(settings.bagFactors[f] ?? 1) : undefined}
                             selected={!manualAmount && bagSize === f}
                             onClick={() => pickFraction(f)}
                           />
                         ))}
-                      {COUNT_OPTIONS.map((n) => (
+                      {(isBagUnit ? BAG_COUNT_OPTIONS : DEFAULT_COUNT_OPTIONS).map((n) => (
                         <AmountChip
                           key={n}
                           big={String(n)}
@@ -920,7 +1016,7 @@ export function NewOrderForm({
                         />
                       ))}
                       <AmountChip
-                        big="Otra"
+                        big="Otros"
                         caption="cantidad"
                         selected={manualAmount}
                         onClick={pickManual}
@@ -974,18 +1070,66 @@ export function NewOrderForm({
                   </>
                 )}
                 {ironingRestricted && (
-                  <div className="flex max-w-xs flex-col gap-1.5">
-                    <Label htmlFor="pieces">Piezas estimadas (obligatorio)</Label>
-                    <Input
-                      id="pieces"
-                      inputMode="numeric"
-                      autoComplete="off"
-                      value={pieceCount}
-                      onChange={(e) => setPieceCount(e.target.value)}
-                      placeholder="Ej. 4 (imprime 4 tickets)"
-                      required={ironingRestricted}
-                    />
-                  </div>
+                  serviceType === 'lavado_planchado' ? (
+                    <div className="flex flex-col gap-3">
+                      <div className="flex flex-col gap-1.5">
+                        <Label>Piezas para planchar (obligatorio)</Label>
+                        <div className="flex flex-wrap gap-2">
+                          {IRONING_PIECE_OPTIONS.map((n) => (
+                            <AmountChip
+                              key={n}
+                              big={String(n)}
+                              caption="piezas"
+                              selected={!manualIroningPieces && Number(pieceCount) === n}
+                              onClick={() => pickIroningPieces(n)}
+                            />
+                          ))}
+                          <AmountChip
+                            big="Otro"
+                            caption="piezas para planchar"
+                            selected={manualIroningPieces}
+                            onClick={pickManualIroningPieces}
+                          />
+                        </div>
+                      </div>
+                      {manualIroningPieces && (
+                        <div className="flex max-w-xs flex-col gap-1.5">
+                          <Label htmlFor="pieces">Captura piezas para planchar</Label>
+                          <Input
+                            id="pieces"
+                            inputMode="numeric"
+                            autoComplete="off"
+                            value={pieceCount}
+                            onChange={(e) => setPieceCount(e.target.value.replace(/\D/g, ''))}
+                            placeholder="Ej. 12 piezas"
+                            required={ironingRestricted}
+                          />
+                        </div>
+                      )}
+                      <div className="flex flex-col gap-1.5">
+                        <Label htmlFor="manual-order-notes">Notas del pedido</Label>
+                        <Textarea
+                          id="manual-order-notes"
+                          value={notes}
+                          onChange={(e) => setNotes(e.target.value)}
+                          placeholder="Escribe notas a mano para este pedido"
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex max-w-xs flex-col gap-1.5">
+                      <Label htmlFor="pieces">Piezas estimadas (obligatorio)</Label>
+                      <Input
+                        id="pieces"
+                        inputMode="numeric"
+                        autoComplete="off"
+                        value={pieceCount}
+                        onChange={(e) => setPieceCount(e.target.value.replace(/\D/g, ''))}
+                        placeholder="Ej. 4 (imprime 4 tickets)"
+                        required={ironingRestricted}
+                      />
+                    </div>
+                  )
                 )}
               </div>
 
@@ -1019,7 +1163,11 @@ export function NewOrderForm({
                 <CalendarDays className="size-5 text-primary" />
                 <div className="flex flex-col leading-tight">
                   <span className="text-xs text-muted-foreground">Entrega programada</span>
-                  <span className="text-sm font-700">{formatDate(promisedDate)}</span>
+                  <span className="text-sm font-700">
+                    {requiresSpecificDeliveryDate
+                      ? formatDate(promisedDate)
+                      : 'Sin fecha específica (interno: +3 días)'}
+                  </span>
                 </div>
                 <button
                   type="button"
@@ -1100,11 +1248,13 @@ export function NewOrderForm({
               onChange={(e) => setFreeInstruction(e.target.value)}
               placeholder="Instrucciones adicionales…"
             />
-            <Textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Notas internas (no visibles para el cliente)"
-            />
+            {serviceType !== 'lavado_planchado' && (
+              <Textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Notas internas (no visibles para el cliente)"
+              />
+            )}
           </CollapsibleCard>
         </div>
       </div>
@@ -1142,7 +1292,14 @@ export function NewOrderForm({
                       : formatAmount(serviceType, storedBagSize, amountQty || 1)
                 }
               />
-              <Row label="Entrega estimada" value={formatDate(promisedDate)} />
+              <Row
+                label="Entrega estimada"
+                value={
+                  requiresSpecificDeliveryDate
+                    ? formatDate(promisedDate)
+                    : 'Sin fecha específica'
+                }
+              />
             </div>
 
             {quickBreakdown.length > 0 && (
@@ -1157,7 +1314,7 @@ export function NewOrderForm({
                   >
                     <div className="min-w-0">
                       <p className="truncate font-600">{line.label}</p>
-                      <p className="text-muted-foreground">{line.quantity} pza(s)</p>
+                      <p className="text-muted-foreground">{line.quantityLabel}</p>
                     </div>
                     <span className="font-700">{formatCurrency(line.amount)}</span>
                   </div>
@@ -1231,7 +1388,6 @@ export function NewOrderForm({
               type="submit"
               disabled={
                 submitting ||
-                !deliveryDate ||
                 !(amountQty > 0) ||
                 !hasCapacityForIroning ||
                 (ironingRestricted && !pieceCountValid)
@@ -1252,6 +1408,136 @@ export function NewOrderForm({
           </CardContent>
         </Card>
       </div>
+      <Dialog
+        open={confirmPartialOpen}
+        onClose={closeConfirmationModals}
+        title="Paso 1 de 2 · Pago"
+        description="Indica primero si la orden llevará abono parcial."
+      >
+        <div className="flex flex-col gap-4 p-4">
+          <div className="flex flex-col gap-2">
+            <Label>¿Será pago parcial?</Label>
+            <div className="grid grid-cols-2 gap-2">
+              {([
+                [false, 'No'],
+                [true, 'Sí, capturar abono'],
+              ] as const).map(([value, label]) => (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => setCapturePartialPayment(value)}
+                  className={cn(
+                    'h-10 rounded-lg border text-sm font-700 transition-colors',
+                    capturePartialPayment === value
+                      ? 'border-primary bg-primary text-primary-foreground'
+                      : 'border-input bg-background',
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            {capturePartialPayment && (
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="partial-payment-amount">Monto abonado ahora</Label>
+                <Input
+                  id="partial-payment-amount"
+                  inputMode="decimal"
+                  value={partialPaymentAmount}
+                  onChange={(e) => setPartialPaymentAmount(e.target.value)}
+                  placeholder="0.00"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Saldo pendiente: {formatCurrency(Math.max(0, price.total - partialAmount))}
+                </p>
+              </div>
+            )}
+          </div>
+          <div className="flex gap-2 pt-1">
+            <Button
+              type="button"
+              variant="outline"
+              className="flex-1"
+              onClick={closeConfirmationModals}
+              disabled={submitting}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              className="flex-1"
+              onClick={continueFromPartialModal}
+              disabled={submitting}
+            >
+              Siguiente
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+
+      <Dialog
+        open={confirmDeliveryOpen}
+        onClose={closeConfirmationModals}
+        title="Paso 2 de 2 · Entrega"
+        description="Ahora confirma si el cliente pidió fecha específica de entrega."
+      >
+        <div className="flex flex-col gap-4 p-4">
+          <div className="flex flex-col gap-2">
+            <Label>¿El cliente requiere fecha específica de entrega?</Label>
+            <div className="grid grid-cols-2 gap-2">
+              {([
+                [false, 'No (default +3 días)'],
+                [true, 'Sí, usar la fecha capturada'],
+              ] as const).map(([value, label]) => (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => setRequiresSpecificDeliveryDate(value)}
+                  className={cn(
+                    'h-10 rounded-lg border px-2 text-sm font-700 transition-colors',
+                    requiresSpecificDeliveryDate === value
+                      ? 'border-primary bg-primary text-primary-foreground'
+                      : 'border-input bg-background',
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {requiresSpecificDeliveryDate
+                ? `Se mostrará en ticket/correo: ${formatDate(promisedDate)}.`
+                : `No se mostrará fecha en ticket/correo. Internamente se asigna ${formatDate(
+                    toPromisedIsoAt3pm(fallbackDeliveryDate),
+                  )}.`}
+            </p>
+          </div>
+
+          <div className="flex gap-2 pt-1">
+            <Button
+              type="button"
+              variant="outline"
+              className="flex-1"
+              onClick={() => {
+                if (submitting) return
+                setConfirmDeliveryOpen(false)
+                setConfirmPartialOpen(true)
+              }}
+              disabled={submitting}
+            >
+              Regresar
+            </Button>
+            <Button
+              type="button"
+              className="flex-1"
+              onClick={confirmCreateOrder}
+              disabled={submitting}
+            >
+              {submitting ? <Loader2 className="size-5 animate-spin" /> : 'Crear orden'}
+            </Button>
+          </div>
+        </div>
+      </Dialog>
     </form>
   )
 }

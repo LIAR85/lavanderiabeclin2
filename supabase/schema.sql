@@ -35,6 +35,7 @@ create table if not exists public.orders (
   anomaly_tags text[] not null default '{}',
   has_anomalies boolean not null default false,
   notes text,
+  delivery_date_confirmed boolean not null default true,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -90,6 +91,24 @@ create table if not exists public.delivery_capacity (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.order_notification_attempts (
+  id uuid primary key default gen_random_uuid(),
+  order_id uuid not null references public.orders(id) on delete cascade,
+  notification_event text not null check (notification_event in ('order_ready')),
+  channel text not null check (channel in ('whatsapp')),
+  recipient_phone text not null,
+  recipient_e164 text,
+  template_name text not null,
+  template_language text not null,
+  delivery_status text not null check (
+    delivery_status in ('sent', 'failed', 'skipped_duplicate', 'blocked_limit', 'invalid_phone')
+  ),
+  provider_message_id text,
+  provider_error text,
+  provider_response jsonb,
+  created_at timestamptz not null default now()
+);
+
 create index if not exists orders_client_id_idx on public.orders(client_id);
 create index if not exists order_items_order_id_idx on public.order_items(order_id);
 create index if not exists orders_status_idx on public.orders(status);
@@ -98,6 +117,12 @@ create index if not exists orders_created_at_idx on public.orders(created_at des
 create index if not exists orders_service_type_idx on public.orders(service_type);
 create index if not exists order_status_history_order_id_idx on public.order_status_history(order_id);
 create index if not exists employee_attendance_employee_id_idx on public.employee_attendance(employee_id);
+create index if not exists order_notification_attempts_order_id_idx on public.order_notification_attempts(order_id);
+create index if not exists order_notification_attempts_created_at_idx on public.order_notification_attempts(created_at desc);
+create index if not exists order_notification_attempts_status_idx on public.order_notification_attempts(delivery_status);
+create unique index if not exists order_notification_attempts_sent_unique_idx
+  on public.order_notification_attempts(order_id, notification_event, channel)
+  where delivery_status = 'sent';
 
 -- La app usa la clave anon directamente desde el navegador sin auth de Supabase
 -- (el acceso se controla con la cookie de /acceso), por lo que se habilita RLS
@@ -109,6 +134,7 @@ alter table public.order_status_history enable row level security;
 alter table public.employee_profiles enable row level security;
 alter table public.employee_attendance enable row level security;
 alter table public.delivery_capacity enable row level security;
+alter table public.order_notification_attempts enable row level security;
 
 drop policy if exists "clients_all_anon" on public.clients;
 create policy "clients_all_anon" on public.clients

@@ -1,107 +1,275 @@
 import { NextResponse } from 'next/server'
-import { Resend } from 'resend'
+import {
+  normalizeMexicanPhoneForWhatsApp,
+  sendWhatsAppTemplateMessage,
+} from '@/lib/notifications/whatsapp-cloud'
+import { createAdminClient } from '@/lib/supabase/admin'
 
 interface OrderReadyPayload {
-  orderNumber?: string
-  clientName?: string
-  clientEmail?: string
+  orderId?: string
 }
 
-const REPLY_TO_EMAIL =
-  process.env.REPLY_TO_EMAIL ?? process.env.BUSINESS_EMAIL ?? 'beclinlavanderia@gmail.com'
-const BUSINESS_PHONE = process.env.BUSINESS_PHONE ?? 'Sin telefono configurado'
-const BUSINESS_ADDRESS = process.env.BUSINESS_ADDRESS ?? 'Sin direccion configurada'
-const RESEND_DISABLED = process.env.RESEND_DISABLED === 'true'
+type DeliveryStatus =
+  | 'sent'
+  | 'failed'
+  | 'skipped_duplicate'
+  | 'blocked_limit'
+  | 'invalid_phone'
+
+const WHATSAPP_ACCESS_TOKEN = process.env.WHATSAPP_ACCESS_TOKEN
+const WHATSAPP_PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID
+const WHATSAPP_TEMPLATE_NAME = process.env.WHATSAPP_TEMPLATE_NAME
+const WHATSAPP_TEMPLATE_LANGUAGE = process.env.WHATSAPP_TEMPLATE_LANGUAGE ?? 'es_MX'
+const WHATSAPP_DISABLED = process.env.WHATSAPP_DISABLED === 'true'
+const WHATSAPP_MONTHLY_LIMIT = Number(process.env.WHATSAPP_MONTHLY_LIMIT ?? '400')
+
+function getMonthlyLimit() {
+  if (!Number.isFinite(WHATSAPP_MONTHLY_LIMIT) || WHATSAPP_MONTHLY_LIMIT <= 0) {
+    return 400
+  }
+  return Math.floor(WHATSAPP_MONTHLY_LIMIT)
+}
+
+async function logAttempt(params: {
+  orderId: string
+  recipientPhone: string
+  recipientE164: string | null
+  templateName: string
+  templateLanguage: string
+  deliveryStatus: DeliveryStatus
+  providerMessageId?: string | null
+  providerError?: string | null
+  providerResponse?: unknown
+}) {
+  const supabase = createAdminClient()
+  const { error } = await supabase.from('order_notification_attempts').insert({
+    order_id: params.orderId,
+    notification_event: 'order_ready',
+    channel: 'whatsapp',
+    recipient_phone: params.recipientPhone,
+    recipient_e164: params.recipientE164,
+    template_name: params.templateName,
+    template_language: params.templateLanguage,
+    delivery_status: params.deliveryStatus,
+    provider_message_id: params.providerMessageId ?? null,
+    provider_error: params.providerError ?? null,
+    provider_response: params.providerResponse ?? null,
+  })
+  if (error) {
+    throw new Error(`No se pudo guardar el log de notificación: ${error.message}`)
+  }
+}
 
 export async function POST(request: Request) {
-  if (RESEND_DISABLED) {
-    return NextResponse.json({ ok: true, skipped: true, reason: 'RESEND_DISABLED' })
-  }
-
-  const apiKey = process.env.RESEND_API_KEY
-  const fromEmail = process.env.RESEND_FROM_EMAIL
-
-  if (!apiKey || !fromEmail) {
-    return NextResponse.json(
-      { error: 'Faltan variables RESEND_API_KEY o RESEND_FROM_EMAIL.' },
-      { status: 500 },
-    )
-  }
-
   const body = (await request.json().catch(() => null)) as OrderReadyPayload | null
-  if (!body?.orderNumber || !body.clientName || !body.clientEmail) {
+  if (!body?.orderId) {
     return NextResponse.json(
-      { error: 'Datos incompletos para enviar correo de orden lista.' },
+      { error: 'Falta orderId para enviar la notificación de orden lista.' },
       { status: 400 },
     )
   }
 
-  const resend = new Resend(apiKey)
-  const subject = `Tu pedido ${body.orderNumber} está listo para recoger`
-  const html = `
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f3f6fb; margin:0; padding:24px 0;">
-      <tr>
-        <td align="center">
-          <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:600px; max-width:600px; background:#ffffff; border-radius:16px; overflow:hidden; border:1px solid #e4e9f2;">
-            <tr>
-              <td style="padding:24px 24px 0; font-family:Arial,sans-serif;">
-                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-radius:14px; overflow:hidden; background:linear-gradient(135deg,#15803d,#16a34a); color:#ffffff;">
-                  <tr>
-                    <td style="padding:20px 22px;">
-                      <div style="font-size:12px; font-weight:700; letter-spacing:0.6px; text-transform:uppercase; opacity:0.85;">Pedido listo</div>
-                      <div style="font-size:20px; font-weight:800; line-height:1.3; margin-top:4px;">Tu pedido está listo</div>
-                      <div style="font-size:14px; margin-top:6px; opacity:0.95;">Folio ${body.orderNumber}</div>
-                    </td>
-                  </tr>
-                </table>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:0 24px 16px; font-family:Arial,sans-serif; color:#1f2a44;">
-                <p style="margin:0 0 6px; font-size:14px; line-height:1.5;">Hola <strong>${body.clientName}</strong>,</p>
-                <p style="margin:0 0 14px; font-size:14px; line-height:1.5;">Tu pedido con folio <strong>${body.orderNumber}</strong> fue terminado y ya está listo para recoger.</p>
-                <div style="background:#ecfdf3; border:1px solid #bbf7d0; border-radius:12px; padding:12px 14px; margin-bottom:14px;">
-                  <div style="font-size:12px; font-weight:700; color:#166534; text-transform:uppercase; letter-spacing:0.6px; margin-bottom:6px;">Horario de entrega</div>
-                  <div style="font-size:14px; color:#14532d;">Lunes a viernes: 8:00 a 18:00</div>
-                  <div style="font-size:14px; color:#14532d; margin-top:2px;">Sábados: 8:00 a 15:00</div>
-                </div>
-                <p style="margin:0; font-size:14px; line-height:1.5;">Gracias por confiar en be clin.</p>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:0 24px 16px; font-family:Arial,sans-serif;">
-                <div style="background:#fff7ed; border:1px solid #fed7aa; border-radius:12px; padding:12px 14px;">
-                  <div style="font-size:12px; font-weight:700; color:#9a3412; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px;">Política de resguardo</div>
-                  <div style="font-size:13px; color:#7c2d12; line-height:1.5;">Contamos con un plazo de 30 días naturales a partir de hoy para que recojas tus prendas. Transcurrido este plazo, Be Clin Lavandería no se hace responsable de las prendas no reclamadas.</div>
-                </div>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:14px 24px 22px; font-family:Arial,sans-serif; color:#7a869a; font-size:12px; text-align:center; border-top:1px solid #eef2f7; line-height:1.6;">
-                Si respondes este correo, te atenderemos a la brevedad.<br/>
-                Teléfono: ${BUSINESS_PHONE} · Dirección: ${BUSINESS_ADDRESS}
-              </td>
-            </tr>
-          </table>
-        </td>
-      </tr>
-    </table>
-  `
+  if (WHATSAPP_DISABLED) {
+    return NextResponse.json({ ok: true, skipped: true, reason: 'WHATSAPP_DISABLED' })
+  }
 
-  const { data, error } = await resend.emails.send({
-    from: fromEmail,
-    to: [body.clientEmail],
-    replyTo: REPLY_TO_EMAIL,
-    subject,
-    html,
+  if (!WHATSAPP_ACCESS_TOKEN || !WHATSAPP_PHONE_NUMBER_ID || !WHATSAPP_TEMPLATE_NAME) {
+    return NextResponse.json(
+      {
+        error:
+          'Faltan variables WHATSAPP_ACCESS_TOKEN, WHATSAPP_PHONE_NUMBER_ID o WHATSAPP_TEMPLATE_NAME.',
+      },
+      { status: 500 },
+    )
+  }
+
+  const supabase = createAdminClient()
+
+  const { data: orderData, error: orderError } = await supabase
+    .from('orders')
+    .select('id, order_number, status, client:clients(name, phone)')
+    .eq('id', body.orderId)
+    .maybeSingle()
+
+  if (orderError) {
+    return NextResponse.json(
+      { error: 'No se pudo consultar la orden para notificar por WhatsApp.', detail: orderError.message },
+      { status: 500 },
+    )
+  }
+
+  if (!orderData) {
+    return NextResponse.json({ error: 'Orden no encontrada.' }, { status: 404 })
+  }
+
+  if (orderData.status !== 'ready') {
+    return NextResponse.json(
+      {
+        ok: true,
+        skipped: true,
+        reason: 'ORDER_NOT_READY',
+      },
+      { status: 200 },
+    )
+  }
+
+  const clientData = orderData.client as { name?: string; phone?: string } | null
+  const rawClientPhone = clientData?.phone?.trim() ?? ''
+
+  if (!rawClientPhone) {
+    await logAttempt({
+      orderId: orderData.id,
+      recipientPhone: '',
+      recipientE164: null,
+      templateName: WHATSAPP_TEMPLATE_NAME,
+      templateLanguage: WHATSAPP_TEMPLATE_LANGUAGE,
+      deliveryStatus: 'invalid_phone',
+      providerError: 'El cliente no tiene teléfono registrado.',
+    })
+    return NextResponse.json(
+      { ok: true, skipped: true, reason: 'MISSING_PHONE' },
+      { status: 200 },
+    )
+  }
+
+  const normalized = normalizeMexicanPhoneForWhatsApp(rawClientPhone)
+  if (!normalized) {
+    await logAttempt({
+      orderId: orderData.id,
+      recipientPhone: rawClientPhone,
+      recipientE164: null,
+      templateName: WHATSAPP_TEMPLATE_NAME,
+      templateLanguage: WHATSAPP_TEMPLATE_LANGUAGE,
+      deliveryStatus: 'invalid_phone',
+      providerError: 'Teléfono inválido para WhatsApp en México.',
+    })
+    return NextResponse.json(
+      { ok: true, skipped: true, reason: 'INVALID_PHONE' },
+      { status: 200 },
+    )
+  }
+
+  const { data: existingSent, error: existingError } = await supabase
+    .from('order_notification_attempts')
+    .select('id')
+    .eq('order_id', orderData.id)
+    .eq('notification_event', 'order_ready')
+    .eq('channel', 'whatsapp')
+    .eq('delivery_status', 'sent')
+    .limit(1)
+
+  if (existingError) {
+    return NextResponse.json(
+      { error: 'No se pudo validar notificaciones previas.', detail: existingError.message },
+      { status: 500 },
+    )
+  }
+
+  if ((existingSent ?? []).length > 0) {
+    await logAttempt({
+      orderId: orderData.id,
+      recipientPhone: rawClientPhone,
+      recipientE164: normalized.e164,
+      templateName: WHATSAPP_TEMPLATE_NAME,
+      templateLanguage: WHATSAPP_TEMPLATE_LANGUAGE,
+      deliveryStatus: 'skipped_duplicate',
+      providerError: 'Notificación ya enviada previamente para este estado.',
+    })
+    return NextResponse.json(
+      { ok: true, skipped: true, reason: 'DUPLICATE_ALREADY_SENT' },
+      { status: 200 },
+    )
+  }
+
+  const monthStart = new Date()
+  monthStart.setUTCDate(1)
+  monthStart.setUTCHours(0, 0, 0, 0)
+  const nextMonthStart = new Date(monthStart)
+  nextMonthStart.setUTCMonth(nextMonthStart.getUTCMonth() + 1)
+
+  const { count: sentCount, error: countError } = await supabase
+    .from('order_notification_attempts')
+    .select('id', { count: 'exact', head: true })
+    .eq('channel', 'whatsapp')
+    .eq('delivery_status', 'sent')
+    .gte('created_at', monthStart.toISOString())
+    .lt('created_at', nextMonthStart.toISOString())
+
+  if (countError) {
+    return NextResponse.json(
+      { error: 'No se pudo validar el límite mensual de notificaciones.', detail: countError.message },
+      { status: 500 },
+    )
+  }
+
+  const limit = getMonthlyLimit()
+  if ((sentCount ?? 0) >= limit) {
+    await logAttempt({
+      orderId: orderData.id,
+      recipientPhone: rawClientPhone,
+      recipientE164: normalized.e164,
+      templateName: WHATSAPP_TEMPLATE_NAME,
+      templateLanguage: WHATSAPP_TEMPLATE_LANGUAGE,
+      deliveryStatus: 'blocked_limit',
+      providerError: `Límite mensual alcanzado (${limit}).`,
+    })
+    return NextResponse.json(
+      {
+        ok: true,
+        skipped: true,
+        reason: 'MONTHLY_LIMIT_REACHED',
+        limit,
+      },
+      { status: 200 },
+    )
+  }
+
+  const sendResult = await sendWhatsAppTemplateMessage({
+    accessToken: WHATSAPP_ACCESS_TOKEN,
+    phoneNumberId: WHATSAPP_PHONE_NUMBER_ID,
+    to: normalized.waRecipient,
+    templateName: WHATSAPP_TEMPLATE_NAME,
+    templateLanguage: WHATSAPP_TEMPLATE_LANGUAGE,
+    parameters: [
+      { type: 'text', text: clientData?.name?.trim() || 'cliente' },
+      { type: 'text', text: orderData.order_number },
+    ],
   })
 
-  if (error) {
+  if (!sendResult.ok) {
+    await logAttempt({
+      orderId: orderData.id,
+      recipientPhone: rawClientPhone,
+      recipientE164: normalized.e164,
+      templateName: WHATSAPP_TEMPLATE_NAME,
+      templateLanguage: WHATSAPP_TEMPLATE_LANGUAGE,
+      deliveryStatus: 'failed',
+      providerError: sendResult.errorMessage ?? 'Error desconocido en envío de WhatsApp.',
+      providerResponse: sendResult.responseBody ?? null,
+    })
     return NextResponse.json(
-      { error: 'Resend rechazo el envio.', detail: error.message },
+      {
+        error: 'Meta WhatsApp API rechazó el envío.',
+        detail: sendResult.errorMessage,
+      },
       { status: 502 },
     )
   }
 
-  return NextResponse.json({ ok: true, emailId: data?.id ?? null })
+  await logAttempt({
+    orderId: orderData.id,
+    recipientPhone: rawClientPhone,
+    recipientE164: normalized.e164,
+    templateName: WHATSAPP_TEMPLATE_NAME,
+    templateLanguage: WHATSAPP_TEMPLATE_LANGUAGE,
+    deliveryStatus: 'sent',
+    providerMessageId: sendResult.messageId ?? null,
+    providerResponse: sendResult.responseBody ?? null,
+  })
+
+  return NextResponse.json({
+    ok: true,
+    channel: 'whatsapp',
+    messageId: sendResult.messageId ?? null,
+  })
 }

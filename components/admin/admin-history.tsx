@@ -5,6 +5,7 @@ import { useMemo, useState } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { formatCurrency, formatDate } from '@/lib/format'
 import { useOrderItems, useOrders } from '@/lib/hooks'
+import { hasPartialPayment, paidAmount, pendingAmount } from '@/lib/payments'
 
 function olderThanFourMonths(value: string): boolean {
   const date = new Date(value)
@@ -53,6 +54,11 @@ export function AdminHistory() {
                   </div>
                   <div className="flex items-center gap-2">
                     <p className="font-700 text-primary">{formatCurrency(o.charged_total ?? o.total)}</p>
+                    {hasPartialPayment(o) && (
+                      <p className="text-xs text-warning-foreground">
+                        Abono {formatCurrency(paidAmount(o))} · Saldo {formatCurrency(pendingAmount(o))}
+                      </p>
+                    )}
                     <ChevronDown
                       className={`size-4 text-muted-foreground transition-transform ${
                         expandedId === o.id ? 'rotate-180' : ''

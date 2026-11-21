@@ -11,6 +11,7 @@ import { SERVICE_LABELS } from '@/lib/config'
 import { formatCurrency, hoursSince, isOverdue } from '@/lib/format'
 import { useOrders } from '@/lib/hooks'
 import { getExpenses, getInventory } from '@/lib/local-store'
+import { paidAmount, pendingAmount } from '@/lib/payments'
 import type { ServiceType } from '@/lib/types'
 
 type PeriodMode = 'day' | 'month' | 'year' | 'range'
@@ -169,10 +170,11 @@ export function AdminMetrics() {
     const dailyMap = new Map<string, DailyRow>()
 
     for (const o of filtered) {
-      const charged = o.charged_total ?? o.total
-      revenue += charged
-      if (o.payment_status === 'paid') paidRevenue += charged
-      else pendingRevenue += charged
+      const collected = paidAmount(o)
+      const pending = pendingAmount(o)
+      revenue += o.total
+      paidRevenue += collected
+      pendingRevenue += pending
       if (o.status === 'delivered') deliveredCount++
 
       const current = byServiceMap.get(o.service_type) ?? {
@@ -181,14 +183,14 @@ export function AdminMetrics() {
         revenue: 0,
       }
       current.count += 1
-      current.revenue += charged
+      current.revenue += o.total
       byServiceMap.set(o.service_type, current)
 
       const key = toDateKey(o.created_at) ?? 'sin-fecha'
       const dayRow = dailyMap.get(key) ?? { date: key, orders: 0, delivered: 0, revenue: 0 }
       dayRow.orders += 1
       if (o.status === 'delivered') dayRow.delivered += 1
-      dayRow.revenue += charged
+      dayRow.revenue += o.total
       dailyMap.set(key, dayRow)
     }
 
