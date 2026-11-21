@@ -115,7 +115,7 @@ export function AdminLegacyOrders() {
     try {
       await createLegacyOrder({
         client: {
-          name: clientName.trim(),
+          name: clientName.trim().toLocaleUpperCase('es-MX'),
           phone: clientPhone.trim(),
           email: clientEmail.trim() || undefined,
         },
@@ -166,7 +166,7 @@ export function AdminLegacyOrders() {
             <Input
               id="legacy-client-name"
               value={clientName}
-              onChange={(e) => setClientName(e.target.value)}
+              onChange={(e) => setClientName(e.target.value.toLocaleUpperCase('es-MX'))}
               placeholder="Nombre del cliente"
             />
           </div>

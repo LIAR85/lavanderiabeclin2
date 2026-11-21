@@ -74,12 +74,13 @@ async function upsertClient(input: {
   phone: string
   email?: string
 }): Promise<Client> {
+  const name = input.name.trim().toLocaleUpperCase('es-MX')
   const existing = await findClientByPhone(input.phone)
   if (existing) {
     const { data, error } = await supabase()
       .from('clients')
       .update({
-        name: input.name,
+        name,
         email: input.email || null,
         updated_at: new Date().toISOString(),
       })
@@ -92,7 +93,7 @@ async function upsertClient(input: {
   const { data, error } = await supabase()
     .from('clients')
     .insert({
-      name: input.name,
+      name,
       phone: input.phone.trim(),
       email: input.email || null,
     })

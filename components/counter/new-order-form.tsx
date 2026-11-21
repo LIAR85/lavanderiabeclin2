@@ -9,7 +9,7 @@ import {
   Search,
   Zap,
 } from 'lucide-react'
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -19,6 +19,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import {
+  DEFAULT_SETTINGS,
   formatAmount,
   INSTRUCTION_PRESETS,
   MODE_LABELS,
@@ -138,7 +139,7 @@ export function NewOrderForm({
   onCreated: (order: OrderWithClient, offline: boolean) => void
 }) {
   const qc = useQueryClient()
-  const settings = useMemo(() => getSettings(), [])
+  const [settings, setSettings] = useState(DEFAULT_SETTINGS)
   const { data: orders } = useOrders()
 
   const [name, setName] = useState('')
@@ -184,6 +185,16 @@ export function NewOrderForm({
   const [notes, setNotes] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
+  useEffect(() => {
+    setSettings(getSettings())
+  }, [])
+
+  useEffect(() => {
+    if (!dateTouched) {
+      setDeliveryDate(toDateInput(computePromisedDate(settings, mode)))
+    }
+  }, [dateTouched, mode, settings])
+
   async function lookupPhone() {
     const clean = phone.trim()
     if (clean.length < 7) {
@@ -198,7 +209,7 @@ export function NewOrderForm({
     try {
       const client = await findClientByPhone(clean)
       if (client) {
-        setName(client.name)
+        setName(client.name.toLocaleUpperCase('es-MX'))
         setEmail(client.email ?? '')
         setLookupState('found')
       } else {
@@ -631,7 +642,11 @@ export function NewOrderForm({
     ]
 
     const input: NewOrderInput = {
-      client: { name: name.trim(), phone: phone.trim(), email: email.trim() || undefined },
+      client: {
+        name: name.trim().toLocaleUpperCase('es-MX'),
+        phone: phone.trim(),
+        email: email.trim() || undefined,
+      },
       service_type: serviceTypeForOrder,
       service_mode: mode,
       bag_size: storedBagSize,
@@ -723,7 +738,7 @@ export function NewOrderForm({
           updated_at: nowIso,
           client: {
             id: 'offline',
-            name: name.trim(),
+            name: name.trim().toLocaleUpperCase('es-MX'),
             phone: phone.trim(),
             email: email.trim() || null,
             created_at: nowIso,
@@ -875,7 +890,7 @@ export function NewOrderForm({
                 data-lpignore="true"
                 data-1p-ignore="true"
                 value={name}
-                onChange={(e) => setName(e.target.value)}
+                onChange={(e) => setName(e.target.value.toLocaleUpperCase('es-MX'))}
                 placeholder="Nombre completo"
               />
             </div>

@@ -250,7 +250,6 @@
     margin: 0 auto 0;
     padding: 3mm;
     border: 0;
-    border-bottom: 1px dashed #000 !important;
     border-radius: 0;
     box-shadow: none;
     background: #fff !important;
@@ -264,15 +263,26 @@
     break-after: auto;
   }
 
+  .ticket-customer-copy {
+    order: 1;
+  }
+
   .ticket-cut-line {
+    order: 2;
     margin: 0 auto 2mm;
     padding: 1mm 0;
     color: #000 !important;
   }
 
-  .printable-ticket canvas {
+  .ticket-company-copy {
+    order: 3;
+  }
+
+  .printable-ticket svg {
+    display: block;
     max-width: 100%;
-    height: auto !important;
+    width: 36mm;
+    height: 36mm;
   }
 
   .no-print {

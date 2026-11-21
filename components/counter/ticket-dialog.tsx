@@ -1,7 +1,7 @@
 'use client'
 
 import { Printer } from 'lucide-react'
-import { QRCodeCanvas } from 'qrcode.react'
+import { QRCodeSVG } from 'qrcode.react'
 import { Button } from '@/components/ui/button'
 import { Dialog } from '@/components/ui/dialog'
 import { formatAmount, MODE_LABELS, SERVICE_LABELS } from '@/lib/config'
@@ -42,7 +42,7 @@ export function TicketDialog({
     >
       <div id="printable-ticket-scope" className="p-4">
         <div id="printable-ticket-root" className="flex flex-col gap-3">
-          <div className="printable-ticket mx-auto flex w-[76mm] max-w-[76mm] flex-col items-center gap-3 rounded-xl border border-border bg-white p-5 text-center text-black">
+          <div className="printable-ticket ticket-company-copy mx-auto order-3 flex w-[76mm] max-w-[76mm] flex-col items-center gap-3 rounded-xl border border-border bg-white p-5 text-center text-black">
             <div className="w-full rounded-md border border-black bg-black px-2 py-1 text-center text-xs font-800 tracking-widest text-white">
               COPIA EMPRESA
             </div>
@@ -56,17 +56,17 @@ export function TicketDialog({
             <div className="font-display text-2xl font-900 leading-none tracking-tight whitespace-nowrap">
               {order.order_number}
             </div>
-            <QRCodeCanvas
+            <QRCodeSVG
               value={order.order_number}
               size={160}
               level="M"
               includeMargin
-              className="rounded-lg"
             />
-            <div className="w-full text-left text-base">
+            <div className="w-full text-left text-lg">
               <TicketRow label="Cliente" value={order.client.name} />
               <TicketRow label="Teléfono" value={order.client.phone} />
-              <TicketRow label="Servicio" value={MODE_LABELS[order.service_mode]} />
+              <TicketRow label="Servicio" value={SERVICE_LABELS[order.service_type]} />
+              <TicketRow label="Modalidad" value={MODE_LABELS[order.service_mode]} />
               <TicketRow
                 label="Cantidad"
                 value={formatAmount(order.service_type, order.bag_size, order.quantity)}
@@ -118,11 +118,11 @@ export function TicketDialog({
             </div>
           </div>
 
-          <div className="ticket-cut-line mx-auto w-[76mm] max-w-[76mm] border-t-2 border-dashed border-black py-1 text-center text-xs font-800 tracking-widest text-black">
+          <div className="ticket-cut-line mx-auto order-2 w-[76mm] max-w-[76mm] border-t-2 border-dashed border-black py-1 text-center text-xs font-800 tracking-widest text-black">
             CORTAR AQUÍ
           </div>
 
-          <div className="printable-ticket mx-auto flex w-[76mm] max-w-[76mm] flex-col items-center gap-3 rounded-xl border border-border bg-white p-5 text-center text-black">
+          <div className="printable-ticket ticket-customer-copy mx-auto order-1 flex w-[76mm] max-w-[76mm] flex-col items-center gap-3 rounded-xl border border-border bg-white p-5 text-center text-black">
             <div className="w-full rounded-md border border-black bg-white px-2 py-1 text-center text-xs font-800 tracking-widest text-black">
               COPIA CLIENTE
             </div>
@@ -136,17 +136,17 @@ export function TicketDialog({
             <div className="font-display text-2xl font-900 leading-none tracking-tight whitespace-nowrap">
               {order.order_number}
             </div>
-            <QRCodeCanvas
+            <QRCodeSVG
               value={order.order_number}
               size={160}
               level="M"
               includeMargin
-              className="rounded-lg"
             />
-            <div className="w-full text-left text-base">
+            <div className="w-full text-left text-lg">
               <TicketRow label="Cliente" value={order.client.name} />
               <TicketRow label="Teléfono" value={order.client.phone} />
-              <TicketRow label="Servicio" value={MODE_LABELS[order.service_mode]} />
+              <TicketRow label="Servicio" value={SERVICE_LABELS[order.service_type]} />
+              <TicketRow label="Modalidad" value={MODE_LABELS[order.service_mode]} />
               <TicketRow
                 label="Cantidad"
                 value={formatAmount(order.service_type, order.bag_size, order.quantity)}
@@ -176,7 +176,7 @@ export function TicketDialog({
         </div>
 
         <div className="no-print mt-3 text-center text-xs text-muted-foreground">
-          Se imprimirán 2 tickets: copia empresa y copia cliente.
+          Se imprimirán primero la copia cliente y después la copia empresa.
         </div>
 
         <div className="no-print mt-4 flex gap-2">
@@ -220,9 +220,9 @@ function formatBreakdownLabel(order: OrderWithClient, item: OrderItem): string {
 
 function TicketRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex justify-between gap-3 border-b border-neutral-300 py-1">
-      <span className="shrink-0 font-700 text-black">{label}</span>
-      <span className="min-w-0 break-words text-right font-600 text-black">{value}</span>
+    <div className="flex justify-between gap-2 border-b border-neutral-400 py-1.5">
+      <span className="shrink-0 font-800 text-black">{label}</span>
+      <span className="min-w-0 break-words text-right font-700 text-black">{value}</span>
     </div>
   )
 }
