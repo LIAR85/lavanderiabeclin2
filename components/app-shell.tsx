@@ -33,7 +33,7 @@ export function AppShell() {
   const online = useOnlineStatus()
 
   return (
-    <div className="flex min-h-dvh flex-col bg-background">
+    <div id="app-shell-root" className="flex min-h-dvh flex-col bg-background">
       <header className="sticky top-0 z-30 border-b border-border bg-background/90 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
           <div className="flex items-center gap-2 sm:gap-3">

@@ -11,6 +11,7 @@ interface DialogProps {
   title?: string
   description?: string
   className?: string
+  overlayClassName?: string
 }
 
 export function Dialog({
@@ -20,6 +21,7 @@ export function Dialog({
   title,
   description,
   className,
+  overlayClassName,
 }: DialogProps) {
   React.useEffect(() => {
     if (!open) return
@@ -35,7 +37,12 @@ export function Dialog({
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
+    <div
+      className={cn(
+        'fixed inset-0 z-50 flex items-end justify-center sm:items-center',
+        overlayClassName,
+      )}
+    >
       <div
         className="absolute inset-0 bg-foreground/40 backdrop-blur-sm"
         onClick={onClose}

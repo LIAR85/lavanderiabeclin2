@@ -202,13 +202,15 @@
 @media print {
   @page {
     size: auto;
-    margin: 8mm;
+    margin: 2mm;
   }
 
   html,
   body {
     margin: 0;
     padding: 0;
+    height: auto !important;
+    overflow: visible !important;
     background: #fff !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
@@ -216,6 +218,53 @@
 
   body * {
     visibility: hidden !important;
+  }
+
+  #app-shell-root {
+    display: block !important;
+    height: auto !important;
+    min-height: 0 !important;
+  }
+
+  #app-shell-root > :not(.printable-ticket-overlay) {
+    display: none !important;
+  }
+
+  .printable-ticket-overlay {
+    position: static !important;
+    inset: auto !important;
+    display: block !important;
+    width: auto !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  .printable-ticket-overlay > div:first-child {
+    display: none !important;
+  }
+
+  .printable-ticket-dialog {
+    position: static !important;
+    display: block !important;
+    width: 100% !important;
+    max-width: none !important;
+    max-height: none !important;
+    overflow: visible !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    background: #fff !important;
+  }
+
+  .printable-ticket-dialog > div:first-child {
+    display: none !important;
+  }
+
+  .printable-ticket-dialog > div:last-child {
+    display: block !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
   }
 
   #printable-ticket-scope,
@@ -229,8 +278,7 @@
   }
 
   #printable-ticket-scope {
-    position: fixed;
-    inset: 0;
+    position: static !important;
     z-index: 9999;
     margin: 0;
     padding: 0;
@@ -239,8 +287,7 @@
   }
 
   #printable-ticket-root {
-    position: absolute;
-    inset: 0;
+    position: static !important;
     padding-top: 1mm;
   }
 

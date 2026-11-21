@@ -39,6 +39,8 @@ export function TicketDialog({
       onClose={onClose}
       title="Orden creada"
       description={offline ? 'Guardada localmente (sin conexión)' : 'Ticket listo para imprimir'}
+      className="printable-ticket-dialog"
+      overlayClassName="printable-ticket-overlay"
     >
       <div id="printable-ticket-scope" className="p-4">
         <div id="printable-ticket-root" className="flex flex-col gap-3">
@@ -46,7 +48,7 @@ export function TicketDialog({
             <div className="w-full rounded-md border border-black bg-black px-2 py-1 text-center text-xs font-800 tracking-widest text-white">
               COPIA EMPRESA
             </div>
-            <div className="font-display text-2xl font-900 tracking-tight text-primary">
+            <div className="font-display text-2xl font-900 tracking-tight text-black">
               be clin
             </div>
             <div className="text-xs font-700 uppercase tracking-widest text-black">
@@ -65,7 +67,6 @@ export function TicketDialog({
             <div className="w-full text-left text-lg">
               <TicketRow label="Cliente" value={order.client.name} />
               <TicketRow label="Teléfono" value={order.client.phone} />
-              <TicketRow label="Servicio" value={SERVICE_LABELS[order.service_type]} />
               <TicketRow label="Modalidad" value={MODE_LABELS[order.service_mode]} />
               <TicketRow
                 label="Cantidad"
@@ -126,7 +127,7 @@ export function TicketDialog({
             <div className="w-full rounded-md border border-black bg-white px-2 py-1 text-center text-xs font-800 tracking-widest text-black">
               COPIA CLIENTE
             </div>
-            <div className="font-display text-2xl font-900 tracking-tight text-primary">
+            <div className="font-display text-2xl font-900 tracking-tight text-black">
               be clin
             </div>
             <div className="text-xs font-700 uppercase tracking-widest text-black">
@@ -145,7 +146,6 @@ export function TicketDialog({
             <div className="w-full text-left text-lg">
               <TicketRow label="Cliente" value={order.client.name} />
               <TicketRow label="Teléfono" value={order.client.phone} />
-              <TicketRow label="Servicio" value={SERVICE_LABELS[order.service_type]} />
               <TicketRow label="Modalidad" value={MODE_LABELS[order.service_mode]} />
               <TicketRow
                 label="Cantidad"
