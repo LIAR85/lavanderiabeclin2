@@ -27,12 +27,10 @@ export function TicketDialog({
     (sum, item) => sum + (item.kind === 'addon' ? 0 : item.quantity),
     0,
   )
-  const basePieces = (order.estimated_piece_count ?? totalPieces) || order.quantity || 1
-  const ticketCopies = Math.max(
+  const pieceCount = Math.max(
     1,
-    Math.floor(basePieces),
+    Math.floor((order.estimated_piece_count ?? totalPieces) || order.quantity || 1),
   )
-  const isMultipleOrder = ticketCopies > 1
 
   return (
     <Dialog
@@ -43,151 +41,132 @@ export function TicketDialog({
     >
       <div id="printable-ticket-scope" className="p-4">
         <div id="printable-ticket-root" className="flex flex-col gap-3">
-          {Array.from({ length: isMultipleOrder ? ticketCopies : 1 }, (_, idx) => {
-            const pieceNumber = idx + 1
-            return (
-              <div
-                key={`${order.id}-company-piece-${pieceNumber}`}
-                className="printable-ticket mx-auto flex w-[76mm] max-w-[76mm] flex-col items-center gap-3 rounded-xl border border-border bg-white p-5 text-center text-black"
-              >
-                {isMultipleOrder && (
-                  <div className="w-full rounded-md border border-black/30 bg-black px-2 py-1 text-center text-[10px] font-800 tracking-widest text-white">
-                    COPIA INTERNA
-                  </div>
-                )}
-                <div className="font-display text-2xl font-900 tracking-tight text-primary">
-                  be clin
-                </div>
-                <div className="text-xs font-600 uppercase tracking-widest text-neutral-500">
-                  Ticket empresa
-                </div>
-                <div className="my-1 h-px w-full bg-neutral-200" />
-                <div className="font-display text-3xl font-900">{order.order_number}</div>
-                <QRCodeCanvas
-                  value={order.order_number}
-                  size={160}
-                  level="M"
-                  includeMargin
-                  className="rounded-lg"
-                />
-                <div className="w-full text-left text-sm">
-                  <TicketRow label="Cliente" value={order.client.name} />
-                  <TicketRow label="Teléfono" value={order.client.phone} />
-                  <TicketRow label="Servicio" value={SERVICE_LABELS[order.service_type]} />
-                  <TicketRow label="Modalidad" value={MODE_LABELS[order.service_mode]} />
-                  <TicketRow
-                    label="Cantidad"
-                    value={formatAmount(order.service_type, order.bag_size, order.quantity)}
-                  />
-                  <TicketRow label="Piezas" value={String(Math.max(1, totalPieces || order.quantity || 1))} />
-                  {isMultipleOrder && (
-                    <TicketRow label="Pieza" value={`${pieceNumber} de ${ticketCopies}`} />
-                  )}
-                  <TicketRow label="Entrega est." value={formatDate(order.promised_date)} />
-                  {order.customer_instructions && (
-                    <TicketRow label="Notas" value={order.customer_instructions} />
-                  )}
-                </div>
-                {printableItems.length > 0 && (
-                  <div className="w-full rounded-md border border-neutral-200 p-2 text-left text-xs">
-                    <p className="mb-1 font-700 text-neutral-700">Desglose</p>
-                    <div className="flex flex-col gap-1">
-                      {printableItems.map((item) => (
-                        <div key={item.id} className="flex justify-between gap-2">
-                          <span className="line-clamp-2">
-                            {item.quantity}× {item.name}
-                          </span>
-                          <span className="whitespace-nowrap font-700">
-                            {formatCurrency(item.quantity * item.unit_price)}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                <div className="my-1 h-px w-full bg-neutral-200" />
-                <div className="flex w-full items-center justify-between">
-                  <span className="text-sm font-700">Total</span>
-                  <span className="font-display text-xl font-900">
-                    {formatCurrency(order.total)}
-                  </span>
-                </div>
-                <div className="text-xs text-neutral-500">
-                  {order.payment_status === 'paid' ? 'PAGADO' : 'Pago al entregar'}
-                </div>
-              </div>
-            )
-          })}
-
-          {isMultipleOrder && (
-            <div
-              key={`${order.id}-customer-summary`}
-              className="printable-ticket mx-auto flex w-[76mm] max-w-[76mm] flex-col items-center gap-3 rounded-xl border border-border bg-white p-5 text-center text-black"
-            >
-              <div className="w-full rounded-md border border-black/30 bg-neutral-100 px-2 py-1 text-center text-[10px] font-800 tracking-widest text-black">
-                COMPROBANTE CLIENTE
-              </div>
-              <div className="font-display text-2xl font-900 tracking-tight text-primary">
-                be clin
-              </div>
-              <div className="text-xs font-600 uppercase tracking-widest text-neutral-500">
-                Comprobante cliente
-              </div>
-              <div className="my-1 h-px w-full bg-neutral-200" />
-              <div className="font-display text-3xl font-900">{order.order_number}</div>
-              <QRCodeCanvas
-                value={order.order_number}
-                size={160}
-                level="M"
-                includeMargin
-                className="rounded-lg"
-              />
-              <div className="w-full text-left text-sm">
-                <TicketRow label="Cliente" value={order.client.name} />
-                <TicketRow label="Teléfono" value={order.client.phone} />
-                <TicketRow label="Servicio" value={SERVICE_LABELS[order.service_type]} />
-                <TicketRow
-                  label="Total de piezas"
-                  value={String(Math.max(1, totalPieces || ticketCopies))}
-                />
-                <TicketRow label="Entrega est." value={formatDate(order.promised_date)} />
-              </div>
-              {printableItems.length > 0 && (
-                <div className="w-full rounded-md border border-neutral-200 p-2 text-left text-xs">
-                  <p className="mb-1 font-700 text-neutral-700">Desglose</p>
-                  <div className="flex flex-col gap-1">
-                    {printableItems.map((item) => (
-                      <div key={item.id} className="flex justify-between gap-2">
-                        <span className="line-clamp-2">
-                          {item.quantity}× {item.name}
-                        </span>
-                        <span className="whitespace-nowrap font-700">
-                          {formatCurrency(item.quantity * item.unit_price)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-              <div className="my-1 h-px w-full bg-neutral-200" />
-              <div className="flex w-full items-center justify-between">
-                <span className="text-sm font-700">Total</span>
-                <span className="font-display text-xl font-900">
-                  {formatCurrency(order.total)}
-                </span>
-              </div>
-              <div className="text-[10px] text-neutral-400">
-                Conserva este comprobante para recoger tu pedido.
-              </div>
+          <div className="printable-ticket mx-auto flex w-[76mm] max-w-[76mm] flex-col items-center gap-3 rounded-xl border border-border bg-white p-5 text-center text-black">
+            <div className="w-full rounded-md border border-black bg-black px-2 py-1 text-center text-xs font-800 tracking-widest text-white">
+              COPIA BE CLIN · EMPRESA
             </div>
-          )}
+            <div className="font-display text-2xl font-900 tracking-tight text-primary">
+              be clin
+            </div>
+            <div className="text-xs font-700 uppercase tracking-widest text-black">
+              Ticket de servicio
+            </div>
+            <div className="my-1 h-px w-full bg-neutral-300" />
+            <div className="font-display text-2xl font-900 leading-none tracking-tight whitespace-nowrap">
+              {order.order_number}
+            </div>
+            <QRCodeCanvas
+              value={order.order_number}
+              size={160}
+              level="M"
+              includeMargin
+              className="rounded-lg"
+            />
+            <div className="w-full text-left text-base">
+              <TicketRow label="Cliente" value={order.client.name} />
+              <TicketRow label="Teléfono" value={order.client.phone} />
+              <TicketRow label="Servicio" value={SERVICE_LABELS[order.service_type]} />
+              <TicketRow label="Modalidad" value={MODE_LABELS[order.service_mode]} />
+              <TicketRow
+                label="Cantidad"
+                value={formatAmount(order.service_type, order.bag_size, order.quantity)}
+              />
+              <TicketRow label="Piezas" value={String(pieceCount)} />
+              <TicketRow label="Entrega est." value={formatDate(order.promised_date)} />
+              {order.customer_instructions && (
+                <TicketRow label="Notas" value={order.customer_instructions} />
+              )}
+            </div>
+            {printableItems.length > 0 && (
+              <div className="w-full rounded-md border border-neutral-400 p-2 text-left text-sm">
+                <p className="mb-1 font-700 text-black">Desglose</p>
+                <div className="flex flex-col gap-1">
+                  {printableItems.map((item) => (
+                    <div key={item.id} className="flex justify-between gap-2">
+                      <span className="line-clamp-2">{item.quantity}× {item.name}</span>
+                      <span className="whitespace-nowrap font-700">
+                        {formatCurrency(item.quantity * item.unit_price)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div className="my-1 h-px w-full bg-neutral-300" />
+            <div className="flex w-full items-center justify-between">
+              <span className="text-base font-700">Total</span>
+              <span className="font-display text-xl font-900">
+                {formatCurrency(order.total)}
+              </span>
+            </div>
+            <div className="text-sm font-600 text-black">
+              {order.payment_status === 'paid' ? 'PAGADO' : 'Pago al entregar'}
+            </div>
+          </div>
+
+          <div className="ticket-cut-line mx-auto w-[76mm] max-w-[76mm] border-t-2 border-dashed border-black py-1 text-center text-xs font-800 tracking-widest text-black">
+            CORTAR AQUÍ
+          </div>
+
+          <div className="printable-ticket mx-auto flex w-[76mm] max-w-[76mm] flex-col items-center gap-3 rounded-xl border border-border bg-white p-5 text-center text-black">
+            <div className="w-full rounded-md border border-black bg-white px-2 py-1 text-center text-xs font-800 tracking-widest text-black">
+              COPIA CLIENTE
+            </div>
+            <div className="font-display text-2xl font-900 tracking-tight text-primary">
+              be clin
+            </div>
+            <div className="text-xs font-700 uppercase tracking-widest text-black">
+              Comprobante de servicio
+            </div>
+            <div className="my-1 h-px w-full bg-neutral-300" />
+            <div className="font-display text-2xl font-900 leading-none tracking-tight whitespace-nowrap">
+              {order.order_number}
+            </div>
+            <QRCodeCanvas
+              value={order.order_number}
+              size={160}
+              level="M"
+              includeMargin
+              className="rounded-lg"
+            />
+            <div className="w-full text-left text-base">
+              <TicketRow label="Cliente" value={order.client.name} />
+              <TicketRow label="Teléfono" value={order.client.phone} />
+              <TicketRow label="Servicio" value={SERVICE_LABELS[order.service_type]} />
+              <TicketRow label="Piezas" value={String(pieceCount)} />
+              <TicketRow label="Entrega est." value={formatDate(order.promised_date)} />
+            </div>
+            {printableItems.length > 0 && (
+              <div className="w-full rounded-md border border-neutral-400 p-2 text-left text-sm">
+                <p className="mb-1 font-700 text-black">Desglose</p>
+                <div className="flex flex-col gap-1">
+                  {printableItems.map((item) => (
+                    <div key={item.id} className="flex justify-between gap-2">
+                      <span className="line-clamp-2">{item.quantity}× {item.name}</span>
+                      <span className="whitespace-nowrap font-700">
+                        {formatCurrency(item.quantity * item.unit_price)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div className="my-1 h-px w-full bg-neutral-300" />
+            <div className="flex w-full items-center justify-between">
+              <span className="text-base font-700">Total</span>
+              <span className="font-display text-xl font-900">
+                {formatCurrency(order.total)}
+              </span>
+            </div>
+            <div className="text-sm font-600 text-black">
+              Conserva este comprobante para recoger tu pedido.
+            </div>
+          </div>
         </div>
 
-        {isMultipleOrder && (
-          <div className="no-print mt-3 text-center text-xs text-muted-foreground">
-            Se imprimirán {ticketCopies} tickets de empresa y 1 comprobante para cliente.
-          </div>
-        )}
+        <div className="no-print mt-3 text-center text-xs text-muted-foreground">
+          Se imprimirán 2 tickets: copia Be Clin y copia cliente.
+        </div>
 
         <div className="no-print mt-4 flex gap-2">
           <Button variant="outline" className="flex-1" onClick={onClose}>
@@ -204,9 +183,9 @@ export function TicketDialog({
 
 function TicketRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex justify-between gap-3 py-0.5">
-      <span className="text-neutral-500">{label}</span>
-      <span className="text-right font-600">{value}</span>
+    <div className="flex justify-between gap-3 border-b border-neutral-300 py-1">
+      <span className="shrink-0 font-700 text-black">{label}</span>
+      <span className="min-w-0 break-words text-right font-600 text-black">{value}</span>
     </div>
   )
 }

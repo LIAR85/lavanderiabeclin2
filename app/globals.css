@@ -250,6 +250,7 @@
     margin: 0 auto 0;
     padding: 3mm;
     border: 0;
+    border-bottom: 1px dashed #000 !important;
     border-radius: 0;
     box-shadow: none;
     background: #fff !important;
@@ -258,9 +259,15 @@
   }
 
   .printable-ticket:not(:last-child) {
-    margin-bottom: 4mm;
-    page-break-after: always;
-    break-after: page;
+    margin-bottom: 2mm;
+    page-break-after: auto;
+    break-after: auto;
+  }
+
+  .ticket-cut-line {
+    margin: 0 auto 2mm;
+    padding: 1mm 0;
+    color: #000 !important;
   }
 
   .printable-ticket canvas {
