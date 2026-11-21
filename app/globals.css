@@ -288,6 +288,7 @@
 
   #printable-ticket-root {
     position: static !important;
+    gap: 0 !important;
     padding-top: 1mm;
   }
 
@@ -295,7 +296,8 @@
     width: 76mm;
     max-width: 76mm;
     margin: 0 auto 0;
-    padding: 3mm;
+    padding: 2mm;
+    gap: 2mm;
     border: 0;
     border-radius: 0;
     box-shadow: none;

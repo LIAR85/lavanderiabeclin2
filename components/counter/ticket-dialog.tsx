@@ -44,7 +44,7 @@ export function TicketDialog({
     >
       <div id="printable-ticket-scope" className="p-4">
         <div id="printable-ticket-root" className="flex flex-col gap-3">
-          <div className="printable-ticket ticket-company-copy mx-auto order-3 flex w-[76mm] max-w-[76mm] flex-col items-center gap-3 rounded-xl border border-border bg-white p-5 text-center text-black">
+          <div className="printable-ticket ticket-company-copy mx-auto order-3 flex w-[76mm] max-w-[76mm] flex-col items-center gap-2 rounded-xl border border-border bg-white p-4 text-center text-black">
             <div className="w-full rounded-md border border-black bg-black px-2 py-1 text-center text-xs font-800 tracking-widest text-white">
               COPIA EMPRESA
             </div>
@@ -123,7 +123,7 @@ export function TicketDialog({
             CORTAR AQUÍ
           </div>
 
-          <div className="printable-ticket ticket-customer-copy mx-auto order-1 flex w-[76mm] max-w-[76mm] flex-col items-center gap-3 rounded-xl border border-border bg-white p-5 text-center text-black">
+          <div className="printable-ticket ticket-customer-copy mx-auto order-1 flex w-[76mm] max-w-[76mm] flex-col items-center gap-2 rounded-xl border border-border bg-white p-4 text-center text-black">
             <div className="w-full rounded-md border border-black bg-white px-2 py-1 text-center text-xs font-800 tracking-widest text-black">
               COPIA CLIENTE
             </div>
@@ -220,7 +220,7 @@ function formatBreakdownLabel(order: OrderWithClient, item: OrderItem): string {
 
 function TicketRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex justify-between gap-2 border-b border-neutral-400 py-1.5">
+    <div className="flex justify-between gap-2 border-b border-neutral-400 py-0.5">
       <span className="shrink-0 font-800 text-black">{label}</span>
       <span className="min-w-0 break-words text-right font-700 text-black">{value}</span>
     </div>
